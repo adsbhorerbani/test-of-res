@@ -1,0 +1,2561 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>স্বাদ বাংলা রেস্টুরেন্ট | Smart QR Dining & Kitchen System</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Hind Siliguri (Bengali) & Inter (English) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode.js for Real Scannable QR Code Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Tone.js for Subtle Notification Chimes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Hind Siliguri"', 'Inter', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                            700: '#b45309',
+                            900: '#78350f',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Hind Siliguri', 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .wifi-pulse::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            background-color: #10b981;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+            z-index: 0;
+        }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-receipt, #printable-receipt * { visibility: visible; }
+            #printable-receipt {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-amber-200 selection:text-amber-900">
+
+    <!-- Top Portal Switcher (Separates Customer Site & Admin/Staff Portal) -->
+    <div class="bg-slate-950 text-white px-3 py-2 sticky top-0 z-50 shadow-md border-b border-slate-800">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2 text-xs sm:text-sm">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-bold">
+                    <i class="fa-solid fa-utensils text-xs"></i>
+                </span>
+                <span class="font-bold tracking-wide text-amber-400" id="topbar-restaurant-name">স্বাদ বাংলা রেস্টুরেন্ট</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="openPortal('customer')" id="portal-btn-customer" class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-amber-500 text-slate-950 shadow">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                    <span>কাস্টমার সাইট</span>
+                </button>
+                <button onclick="openPortal('admin')" id="portal-btn-admin" class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-slate-800 text-slate-300 hover:text-white border border-slate-700 relative">
+                    <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                    <span>অ্যাডমিন প্যানেল</span>
+                    <span id="admin-alert-dot" class="hidden w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification Container -->
+    <div id="toast-container" class="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- =====================================================================
+         PORTAL 1: CUSTOMER SITE (Wi-Fi Gate + Digital Menu + Order + Bill)
+         ===================================================================== -->
+    <div id="portal-customer" class="min-h-[calc(100vh-48px)]">
+
+        <!-- STEP 1A: WI-FI CAPTIVE PORTAL / QR SCAN LANDING GATE -->
+        <div id="wifi-gate-screen" class="min-h-[calc(100vh-48px)] bg-gradient-to-br from-slate-900 via-slate-800 to-amber-950 flex items-center justify-center p-4">
+            <div class="bg-white/95 backdrop-blur-md w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-white/20 transition-all">
+                <!-- Restaurant Banner Header -->
+                <div class="bg-gradient-to-r from-amber-600 to-orange-600 p-6 text-center text-white relative overflow-hidden">
+                    <div class="absolute -right-6 -top-6 w-28 h-28 bg-white/10 rounded-full blur-xl"></div>
+                    <div class="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl mx-auto flex items-center justify-center text-3xl mb-3 shadow-inner border border-white/30">
+                        🍛
+                    </div>
+                    <h1 class="text-2xl font-bold tracking-tight" id="gate-restaurant-name">স্বাদ বাংলা রেস্টুরেন্ট</h1>
+                    <p class="text-amber-100 text-sm font-inter">Swad Bangla Smart Dining</p>
+
+                    <!-- Table Badge Selector (Dynamically populated from Admin Settings) -->
+                    <div class="mt-4 inline-flex items-center gap-2 bg-black/25 px-4 py-1.5 rounded-full text-sm border border-white/20">
+                        <i class="fa-solid fa-chair text-amber-300"></i>
+                        <span>আপনার টেবিল:</span>
+                        <select id="table-selector" onchange="changeTable(this.value)" class="bg-transparent font-bold text-white focus:outline-none cursor-pointer">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Wi-Fi Connection Box -->
+                <div class="p-6 sm:p-8 text-center">
+                    <div class="relative w-20 h-20 mx-auto mb-5 flex items-center justify-center">
+                        <div id="wifi-pulse-ring" class="wifi-pulse absolute inset-0 rounded-full opacity-30"></div>
+                        <div id="wifi-icon-box" class="relative z-10 w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-500 flex items-center justify-center text-emerald-600 text-3xl shadow-sm">
+                            <i class="fa-solid fa-wifi"></i>
+                        </div>
+                    </div>
+
+                    <span class="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold mb-2">
+                        ফ্রি হাই-স্পিড ওয়াইফাই উপলব্ধ
+                    </span>
+                    <h2 class="text-xl font-bold text-slate-800">প্রথমে রেস্টুরেন্ট Wi-Fi কানেক্ট করুন</h2>
+                    <p class="text-slate-500 text-sm mt-1">
+                        নেটওয়ার্ক: <strong class="text-slate-700 font-inter" id="gate-wifi-ssid">SwadBangla_Guest_5G</strong>
+                    </p>
+                    <div id="gate-wifi-pass-badge" class="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs text-slate-700">
+                        <i class="fa-solid fa-key text-amber-600"></i>
+                        <span>পাসওয়ার্ড: <strong class="font-inter select-all" id="gate-wifi-password">স্বয়ংক্রিয় (Auto-Connect)</strong></span>
+                    </div>
+
+                    <!-- Connection Progress Bar (Hidden initially) -->
+                    <div id="wifi-progress-container" class="hidden mt-6">
+                        <div class="flex justify-between text-xs font-semibold text-emerald-700 mb-1.5">
+                            <span id="wifi-status-text">ওয়াইফাই রাউটারের সাথে যুক্ত হচ্ছে...</span>
+                            <span id="wifi-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="wifi-progress-bar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Primary Action Button -->
+                    <button id="connect-wifi-btn" onclick="connectWifiAndEnterMenu()" class="mt-6 w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-3 text-base sm:text-lg">
+                        <i class="fa-solid fa-wifi"></i>
+                        <span>ওয়াইফাই কানেক্ট করুন ও মেনু দেখুন</span>
+                    </button>
+
+                    <!-- Wi-Fi QR Info Toggle -->
+                    <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <button onclick="toggleWifiQrModal(true)" class="text-amber-700 hover:underline font-medium flex items-center gap-1">
+                            <i class="fa-solid fa-qrcode"></i> Wi-Fi QR কোড দেখুন
+                        </button>
+                        <span>অটো-লগইন সক্রিয়</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 1B: DIGITAL MENU & CUSTOMER DASHBOARD (Shown after Wi-Fi connects) -->
+        <div id="customer-menu-screen" class="hidden pb-28">
+            <!-- Sticky Customer Top Header -->
+            <header class="bg-white border-b border-slate-200 sticky top-[44px] sm:top-[48px] z-30 shadow-sm">
+                <div class="max-w-5xl mx-auto px-4 py-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center text-xl shadow-sm">
+                                🍛
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h1 class="font-bold text-slate-900 text-base sm:text-lg leading-tight" id="menu-restaurant-name">স্বাদ বাংলা রেস্টুরেন্ট</h1>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        Wi-Fi যুক্ত
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                                    <span class="font-bold text-amber-700" id="header-table-label">Table #04</span>
+                                    <span>•</span>
+                                    <button onclick="disconnectWifiGate()" class="text-slate-400 hover:text-slate-600 underline">টেবিল পরিবর্তন</button>
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Quick Action Buttons: Call Waiter & Pay Bill -->
+                        <div class="flex items-center gap-2">
+                            <button onclick="openWaiterCallModal()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition active:scale-95">
+                                <i class="fa-solid fa-bell text-amber-600"></i>
+                                <span>ওয়েটার ডাকুন</span>
+                            </button>
+                            <button onclick="openBillModal()" class="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 transition shadow-sm active:scale-95">
+                                <i class="fa-solid fa-file-invoice-dollar text-emerald-400"></i>
+                                <span>বিল দিন</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search & Category Filter Bar -->
+                    <div class="mt-3 flex flex-col sm:flex-row gap-2.5">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="text" id="menu-search" oninput="renderMenu()" placeholder="খাবারের নাম খুঁজুন (যেমন: কাচ্চি, চিকেন, বোরহানি)..." class="w-full pl-9 pr-4 py-2 bg-slate-100 border border-transparent focus:bg-white focus:border-amber-500 rounded-xl text-sm focus:outline-none transition">
+                        </div>
+                        <div id="category-tabs" class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Menu Container -->
+            <main class="max-w-5xl mx-auto px-4 pt-5">
+                <!-- Live Order Status Banner for Current Table -->
+                <div id="customer-live-order-tracker" class="hidden mb-6 bg-white rounded-2xl border border-amber-200 shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                            <h3 class="font-bold text-slate-800 text-sm sm:text-base">আপনার চলমান অর্ডারের অবস্থা (Live Kitchen Status)</h3>
+                        </div>
+                        <span class="text-xs text-slate-500">কিচেন থেকে সরাসরি আপডেট</span>
+                    </div>
+                    <div id="customer-active-orders-list" class="space-y-2.5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Menu Grid -->
+                <div id="menu-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Menu Cards Populated by JS -->
+                </div>
+            </main>
+
+            <!-- Floating Bottom Cart Bar -->
+            <div id="floating-cart-bar" class="hidden fixed bottom-4 left-0 right-0 z-30 px-4">
+                <div class="max-w-3xl mx-auto bg-slate-900 text-white rounded-2xl shadow-2xl p-3.5 sm:p-4 flex items-center justify-between border border-slate-700">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-lg relative">
+                            <i class="fa-solid fa-basket-shopping"></i>
+                            <span id="cart-count-badge" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">0</span>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-400">আপনার নির্বাচিত খাবার</p>
+                            <p class="font-bold text-base sm:text-lg text-amber-400">মোট: ৳<span id="cart-total-price">0</span></p>
+                        </div>
+                    </div>
+                    <button onclick="openCartDrawer()" class="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-sm sm:text-base flex items-center gap-2 transition shadow-lg">
+                        <span>অর্ডার দেখুন ও পাঠান</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         PORTAL 2: ADMIN & MANAGEMENT SITE (Protected by Email & Password)
+         ===================================================================== -->
+    <div id="portal-admin" class="hidden min-h-[calc(100vh-48px)] bg-slate-100">
+
+        <!-- 2A: ADMIN LOGIN SCREEN -->
+        <div id="admin-login-screen" class="min-h-[calc(100vh-48px)] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950">
+            <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+                <div class="bg-slate-900 p-6 text-center text-white border-b border-slate-800">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 mx-auto flex items-center justify-center text-2xl mb-3">
+                        <i class="fa-solid fa-lock"></i>
+                    </div>
+                    <h2 class="text-xl font-bold">অ্যাডমিন প্যানেল লগইন</h2>
+                    <p class="text-slate-400 text-xs mt-1">মেনু, কিচেন ও বিলিং নিয়ন্ত্রণ করতে লগইন করুন</p>
+                </div>
+
+                <form onsubmit="handleAdminLogin(event)" class="p-6 sm:p-8 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">অ্যাডমিন ইমেইল (Email)</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="email" id="admin-email-input" required placeholder="admin@swadbangla.com" class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5">পাসওয়ার্ড (Password)</label>
+                        <div class="relative">
+                            <i class="fa-solid fa-key absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input type="password" id="admin-pass-input" required placeholder="••••••••" class="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                                <i id="pass-eye-icon" class="fa-solid fa-eye text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <p id="login-error-msg" class="hidden text-xs font-semibold text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                        <i class="fa-solid fa-circle-exclamation mr-1"></i> ইমেইল অথবা পাসওয়ার্ড সঠিক নয়!
+                    </p>
+
+                    <button type="submit" class="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/25 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span>লগইন করুন</span>
+                    </button>
+
+                    <!-- Demo Credentials Helper Box -->
+                    <div class="mt-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-800">ডেমো লগইন তথ্য:</span>
+                            <button type="button" onclick="fillDemoCredentials()" class="text-amber-700 font-bold hover:underline">অটো-ফিল করুন</button>
+                        </div>
+                        <p class="font-inter">Email: <code class="bg-white px-1.5 py-0.5 rounded border text-slate-800">admin@swadbangla.com</code></p>
+                        <p class="font-inter">Password: <code class="bg-white px-1.5 py-0.5 rounded border text-slate-800">admin123</code></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2B: AUTHENTICATED ADMIN DASHBOARD -->
+        <div id="admin-dashboard-screen" class="hidden">
+            <!-- Admin Sub-Navigation Bar -->
+            <div class="bg-white border-b border-slate-200 sticky top-[44px] sm:top-[48px] z-30 shadow-xs">
+                <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                        <button onclick="switchAdminTab('menu-manager')" id="admin-tab-menu-manager" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 bg-slate-900 text-white">
+                            <i class="fa-solid fa-burger text-amber-400"></i>
+                            <span>খাবার ম্যানেজমেন্ট (CRUD)</span>
+                        </button>
+                        <button onclick="switchAdminTab('kitchen')" id="admin-tab-kitchen" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 relative">
+                            <i class="fa-solid fa-fire-burner text-orange-500"></i>
+                            <span>কিচেন ডিসপ্লে (KDS)</span>
+                            <span id="kitchen-badge" class="hidden bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full">0</span>
+                        </button>
+                        <button onclick="switchAdminTab('waiter')" id="admin-tab-waiter" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 relative">
+                            <i class="fa-solid fa-bell-concierge text-emerald-600"></i>
+                            <span>ওয়েটার ও বিলিং</span>
+                            <span id="waiter-badge" class="hidden bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.2 rounded-full animate-bounce">0</span>
+                        </button>
+                        <button onclick="switchAdminTab('settings')" id="admin-tab-settings" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200">
+                            <i class="fa-solid fa-sliders text-sky-600"></i>
+                            <span>রেস্টুরেন্ট ও টেবিল সেটিংস</span>
+                        </button>
+                    </div>
+
+                    <button onclick="logoutAdmin()" class="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>লগআউট</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB 1: MENU & FOOD ITEM MANAGEMENT (ADD / EDIT / REMOVE) -->
+            <div id="admin-content-menu-manager" class="max-w-7xl mx-auto p-4 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-900">খাবার ও মেনু ম্যানেজমেন্ট</h1>
+                        <p class="text-slate-500 text-sm">এখান থেকে নতুন খাবার যোগ করুন, দাম/তথ্য এডিট করুন অথবা মেনু থেকে রিমুভ করুন</p>
+                    </div>
+                    <button onclick="openFoodFormModal()" class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/20 flex items-center gap-2 text-sm self-start sm:self-auto transition active:scale-95">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>নতুন খাবার যোগ করুন</span>
+                    </button>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-5">
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <p class="text-xs text-slate-500">মোট খাবারের আইটেম</p>
+                        <p class="text-2xl font-bold text-slate-900 mt-1" id="stat-total-items">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <p class="text-xs text-slate-500">মোট ক্যাটাগরি</p>
+                        <p class="text-2xl font-bold text-amber-600 mt-1" id="stat-total-categories">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <p class="text-xs text-slate-500">চলমান কিচেন অর্ডার</p>
+                        <p class="text-2xl font-bold text-orange-600 mt-1" id="stat-active-orders">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                        <p class="text-xs text-slate-500">সক্রিয় টেবিল সংখ্যা</p>
+                        <p class="text-2xl font-bold text-emerald-600 mt-1" id="stat-total-tables">0</p>
+                    </div>
+                </div>
+
+                <!-- Admin Menu Table / Cards -->
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h2 class="font-bold text-slate-800 text-base">সকল খাবারের তালিকা</h2>
+                        <input type="text" id="admin-menu-search" oninput="renderAdminMenuTable()" placeholder="অ্যাডমিন তালিকায় খুঁজুন..." class="px-3.5 py-2 bg-slate-100 rounded-xl text-sm focus:bg-white focus:outline-none border border-transparent focus:border-amber-500 w-full sm:w-64">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-500 text-xs uppercase border-b border-slate-200">
+                                    <th class="py-3.5 px-4">খাবার</th>
+                                    <th class="py-3.5 px-4">ক্যাটাগরি</th>
+                                    <th class="py-3.5 px-4">মূল্য</th>
+                                    <th class="py-3.5 px-4">স্ট্যাটাস / ট্যাগ</th>
+                                    <th class="py-3.5 px-4 text-right">অ্যাকশন (Edit / Remove)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-menu-tbody" class="divide-y divide-slate-100 text-sm">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB 2: KITCHEN DISPLAY SYSTEM (KDS) -->
+            <div id="admin-content-kitchen" class="hidden min-h-[calc(100vh-110px)] bg-slate-900 text-slate-100 p-4 sm:p-6">
+                <div class="max-w-7xl mx-auto">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <span class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center text-xl">
+                                <i class="fa-solid fa-fire-burner"></i>
+                            </span>
+                            <div>
+                                <h1 class="text-xl sm:text-2xl font-bold text-white">কিচেন ডিসপ্লে সিস্টেম (Live KDS)</h1>
+                                <p class="text-slate-400 text-xs sm:text-sm">কাস্টমার অর্ডার করার সাথে সাথে এখানে টিকিট (KOT) চলে আসবে</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 text-sm">
+                                <span class="text-slate-400">পেন্ডিং/চলমান:</span>
+                                <span id="kds-active-count" class="font-bold text-amber-400 ml-1 text-base">0</span>
+                            </div>
+                            <button onclick="playNotificationSound()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5">
+                                <i class="fa-solid fa-volume-high text-amber-400"></i> সাউন্ড টেস্ট
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="kitchen-orders-grid" class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB 3: WAITER & BILLING DESK -->
+            <div id="admin-content-waiter" class="hidden max-w-7xl mx-auto p-4 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+                    <div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-900">ওয়েটার সার্ভিস ও বিলিং ডেস্ক</h1>
+                        <p class="text-slate-500 text-sm">টেবিল থেকে ওয়েটার কল রিকোয়েস্ট এবং কাস্টমার বিল ম্যানেজমেন্ট</p>
+                    </div>
+                    <button onclick="resetDemoData()" class="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold transition self-start sm:self-auto">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> ডেমো অর্ডার রিসেট করুন
+                    </button>
+                </div>
+
+                <div class="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <!-- Left Column: Live Waiter Calls -->
+                    <div class="lg:col-span-5 space-y-4">
+                        <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-5">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="font-bold text-slate-800 flex items-center gap-2">
+                                    <i class="fa-solid fa-bell text-amber-500"></i>
+                                    <span>ওয়েটার কল অ্যালার্ট (Live Calls)</span>
+                                </h2>
+                                <span id="active-calls-count" class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">0 টি কল</span>
+                            </div>
+                            <div id="waiter-calls-list" class="space-y-3">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Table-wise Active Bills & Payment Status -->
+                    <div class="lg:col-span-7 space-y-4">
+                        <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-5">
+                            <h2 class="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                                <i class="fa-solid fa-receipt text-emerald-600"></i>
+                                <span>টেবিল ভিত্তিক বিল ও পেমেন্ট স্ট্যাটাস</span>
+                            </h2>
+                            <div id="waiter-bills-list" class="space-y-4">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADMIN TAB 4: RESTAURANT, WI-FI, TABLE & SECURITY SETTINGS -->
+            <div id="admin-content-settings" class="hidden max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-slate-900">রেস্টুরেন্ট, টেবিল ও অ্যাডমিন সেটিংস</h1>
+                    <p class="text-slate-500 text-sm">রেস্টুরেন্টের নাম, ওয়াইফাই নাম, টেবিল তালিকা এবং অ্যাডমিন পাসওয়ার্ড পরিবর্তন করুন</p>
+                </div>
+
+                <!-- General & Wi-Fi Settings -->
+                <form onsubmit="saveRestaurantSettings(event)" class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <h2 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-2">সাধারণ ও ওয়াইফাই তথ্য</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">রেস্টুরেন্টের নাম</label>
+                            <input type="text" id="setting-rest-name" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">গেস্ট Wi-Fi নেটওয়ার্কের নাম (SSID)</label>
+                            <input type="text" id="setting-wifi-ssid" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Wi-Fi পাসওয়ার্ড (ফাঁকা রাখলে ওপেন থাকবে)</label>
+                            <input type="text" id="setting-wifi-password" placeholder="যেমন: swad2026 (কমপক্ষে ৮ অক্ষর)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">ভ্যাট হার (VAT %)</label>
+                            <input type="number" id="setting-vat-rate" min="0" max="30" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm">
+                        সেটিংস সংরক্ষণ করুন
+                    </button>
+                </form>
+
+                <!-- Payment Gateway & Bangla QR Settings -->
+                <form onsubmit="savePaymentSettings(event)" class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <div class="border-b border-slate-100 pb-2">
+                        <h2 class="font-bold text-slate-800 text-base">পেমেন্ট মাধ্যম ও Bangla QR সেটিংস</h2>
+                        <p class="text-xs text-slate-500">কাস্টমার বিল পেমেন্টের জন্য আপনার মার্চেন্ট/পার্সোনাল নম্বর, ব্যাংক তথ্য ও বাংলা QR কোড সেট করুন</p>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-pink-700 mb-1">📱 bKash নম্বর</label>
+                            <input type="text" id="setting-pay-bkash" placeholder="017XXXXXXXX" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-pink-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-orange-700 mb-1">💳 Nagad নম্বর</label>
+                            <input type="text" id="setting-pay-nagad" placeholder="018XXXXXXXX" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-orange-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-sky-700 mb-1">💠 Upay নম্বর</label>
+                            <input type="text" id="setting-pay-upay" placeholder="019XXXXXXXX" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-sky-500 focus:outline-none">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold text-indigo-700 mb-1">🏦 ব্যাংক অ্যাকাউন্ট তথ্য (Bank Name, A/C No & Branch)</label>
+                            <input type="text" id="setting-pay-bank" placeholder="City Bank | A/C: 1402938475001 | Dhanmondi Branch" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-indigo-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-emerald-700 mb-1">🇧🇩 Bangla QR মার্চেন্ট আইডি / কোড</label>
+                            <input type="text" id="setting-pay-banglaqr" placeholder="BANGLAQR-SWADBANGLA-8801" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm">
+                        পেমেন্ট তথ্য সংরক্ষণ করুন
+                    </button>
+                </form>
+
+                <!-- QR Code Generator Card (Table QR & Wi-Fi QR) -->
+                <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                        <div>
+                            <h2 class="font-bold text-slate-800 text-base">QR কোড জেনারেটর (টেবিল ও Wi-Fi স্ক্যানার)</h2>
+                            <p class="text-xs text-slate-500">টেবিলের ওপর প্রিন্ট করে রাখার জন্য আসল স্ক্যানযোগ্য QR কোড তৈরি ও ডাউনলোড করুন</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-center">
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">QR কোডের ধরন নির্বাচন করুন</label>
+                                <select id="qr-gen-type" onchange="generateAdminQrCode()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                                    <option value="table">টেবিল মেনু ও অর্ডার QR কোড</option>
+                                    <option value="wifi">সরাসরি Wi-Fi কানেক্ট QR কোড</option>
+                                </select>
+                            </div>
+
+                            <div id="qr-table-select-box">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">কোন টেবিলের জন্য তৈরি করবেন?</label>
+                                <select id="qr-gen-table" onchange="generateAdminQrCode()" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">ওয়েবসাইট লিংক / কাস্টম URL (ঐচ্ছিক)</label>
+                                <input type="text" id="qr-custom-url" oninput="generateAdminQrCode()" placeholder="https://your-restaurant.com" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                            </div>
+
+                            <button type="button" onclick="downloadGeneratedQr()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm">
+                                <i class="fa-solid fa-download"></i>
+                                <span>QR কোড ইমেজ ডাউনলোড করুন (PNG)</span>
+                            </button>
+                        </div>
+
+                        <!-- Live QR Preview Card -->
+                        <div class="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-5 flex flex-col items-center justify-center text-center">
+                            <p class="font-bold text-sm text-slate-900 mb-1" id="qr-preview-title">Table #04</p>
+                            <p class="text-[11px] text-slate-500 mb-3" id="qr-preview-subtitle">স্ক্যান করে Wi-Fi যুক্ত হোন ও অর্ডার করুন</p>
+                            <div id="admin-qr-canvas-box" class="bg-white p-3 rounded-2xl shadow-xs border border-slate-200 inline-flex items-center justify-center min-w-[168px] min-h-[168px]"></div>
+                            <p class="text-[10px] text-slate-400 font-inter mt-2.5 break-all max-w-[220px]" id="qr-encoded-text"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Management (Add / Remove Tables) -->
+                <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <h2 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-2">টেবিল ম্যানেজমেন্ট (Add / Remove Tables)</h2>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-table-name" placeholder="নতুন টেবিলের নাম (যেমন: Table #06 বা Roof-01)" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                        <button type="button" onclick="addNewTable()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shrink-0">
+                            + টেবিল যোগ করুন
+                        </button>
+                    </div>
+                    <div id="admin-tables-list" class="flex flex-wrap gap-2 pt-2">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Admin Credentials Update -->
+                <form onsubmit="updateAdminCredentials(event)" class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+                    <h2 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-2">অ্যাডমিন লগইন ইমেইল ও পাসওয়ার্ড পরিবর্তন</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">নতুন অ্যাডমিন ইমেইল</label>
+                            <input type="email" id="setting-admin-email" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">নতুন পাসওয়ার্ড</label>
+                            <input type="text" id="setting-admin-pass" required minlength="4" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-sm">
+                        লগইন তথ্য আপডেট করুন
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         MODALS & DRAWERS
+         ===================================================================== -->
+
+    <!-- 1. Add / Edit Food Item Modal (Admin CRUD) -->
+    <div id="food-form-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="p-5 bg-slate-900 text-white flex items-center justify-between">
+                <h3 class="font-bold text-lg" id="food-modal-title">নতুন খাবার যোগ করুন</h3>
+                <button onclick="closeFoodFormModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form onsubmit="saveFoodItem(event)" class="p-5 overflow-y-auto space-y-3.5">
+                <input type="hidden" id="food-edit-id">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">খাবারের নাম (বাংলায়) *</label>
+                        <input type="text" id="food-name-bn" required placeholder="যেমন: স্পেশাল কাচ্চি" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">খাবারের নাম (ইংরেজিতে) *</label>
+                        <input type="text" id="food-name-en" required placeholder="e.g. Special Kacchi" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">ক্যাটাগরি *</label>
+                        <select id="food-category" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                            <option value="বিরিয়ানি">বিরিয়ানি</option>
+                            <option value="মূল খাবার">মূল খাবার</option>
+                            <option value="ভাজাপোড়া">ভাজাপোড়া</option>
+                            <option value="পানীয়">পানীয়</option>
+                            <option value="মিষ্টান্ন">মিষ্টান্ন</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">মূল্য (৳ টাকা) *</label>
+                        <input type="number" id="food-price" required min="1" placeholder="250" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-inter focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">আইকন (Emoji)</label>
+                        <input type="text" id="food-emoji" value="🍛" maxlength="4" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-lg focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Real Food Image Upload / URL Section -->
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-700"><i class="fa-solid fa-image text-amber-600 mr-1"></i> খাবারের আসল ছবি (Real Photo)</label>
+                        <button type="button" onclick="clearFoodImage()" class="text-[11px] text-rose-600 hover:underline font-semibold">ছবি মুছুন</button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div id="food-image-preview-box" class="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 text-2xl">
+                            🍛
+                        </div>
+                        <div class="flex-1 space-y-2">
+                            <input type="file" id="food-image-file" accept="image/*" onchange="handleFoodImageUpload(event)" class="block w-full text-xs text-slate-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer">
+                            <input type="url" id="food-image-url" oninput="previewFoodImageUrl(this.value)" placeholder="অথবা ছবির ডাইরেক্ট লিংক (https://...jpg) দিন" class="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-inter focus:border-amber-500 focus:outline-none">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">বিশেষ ট্যাগ (ঐচ্ছিক)</label>
+                        <input type="text" id="food-tag" placeholder="যেমন: বেস্টসেলার, নতুন" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none">
+                    </div>
+                    <div class="flex flex-col justify-center pt-4 gap-2">
+                        <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                            <input type="checkbox" id="food-spicy" class="w-4 h-4 accent-amber-500 rounded">
+                            <span>🌶️ ঝাল খাবার (Spicy)</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700">
+                            <input type="checkbox" id="food-available" checked class="w-4 h-4 accent-emerald-600 rounded">
+                            <span>✅ স্টকে আছে (Available)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">খাবারের বিবরণ</label>
+                    <textarea id="food-desc" rows="2" placeholder="খাবারের উপকরণ বা স্বাদ সম্পর্কে সংক্ষেপে লিখুন..." class="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-amber-500 focus:outline-none"></textarea>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button type="button" onclick="closeFoodFormModal()" class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm">বাতিল</button>
+                    <button type="submit" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-lg shadow-emerald-600/20">
+                        খাবার সংরক্ষণ করুন
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. Cart & Send to Kitchen Drawer -->
+    <div id="cart-drawer" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div>
+                    <h3 class="font-bold text-lg text-slate-900">আপনার অর্ডার তালিকা</h3>
+                    <p class="text-xs text-slate-500" id="cart-modal-table">Table #04</p>
+                </div>
+                <button onclick="closeCartDrawer()" class="w-9 h-9 rounded-full bg-white border border-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="cart-items-container" class="p-5 overflow-y-auto flex-1 space-y-3">
+                <!-- Cart Items -->
+            </div>
+
+            <div class="p-5 border-t border-slate-100 bg-slate-50 space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">কিচেনের জন্য বিশেষ নির্দেশনা (ঐচ্ছিক):</label>
+                    <input type="text" id="kitchen-note-input" placeholder="যেমন: ঝাল কম দিবেন, এক্সট্রা লেবু ও সালাদ দিবেন..." class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-amber-500">
+                </div>
+
+                <div class="flex items-center justify-between text-sm pt-1">
+                    <span class="text-slate-600">সাব-টোটাল:</span>
+                    <span class="font-bold text-lg text-slate-900">৳<span id="drawer-subtotal">0</span></span>
+                </div>
+
+                <button onclick="submitOrderToKitchen()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition active:scale-[0.99]">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>অর্ডার কিচেনে পাঠান (Send to Kitchen)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Call Waiter Modal -->
+    <div id="waiter-call-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-bell-concierge"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-900">ওয়েটার ডাকুন</h3>
+                        <p class="text-xs text-slate-500">আপনার প্রয়োজনটি সিলেক্ট করুন</p>
+                    </div>
+                </div>
+                <button onclick="closeWaiterCallModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5 my-4">
+                <button onclick="sendWaiterCall('পানি প্রয়োজন (Water)')" class="p-3.5 rounded-2xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition flex flex-col gap-1">
+                    <span class="text-xl">💧</span>
+                    <span class="font-bold text-sm text-slate-800">পানি দিন</span>
+                    <span class="text-[11px] text-slate-500">Drinking Water</span>
+                </button>
+                <button onclick="sendWaiterCall('টিস্যু ও কাটলারি (Tissue/Spoon)')" class="p-3.5 rounded-2xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition flex flex-col gap-1">
+                    <span class="text-xl">🧻</span>
+                    <span class="font-bold text-sm text-slate-800">টিস্যু / চামচ</span>
+                    <span class="text-[11px] text-slate-500">Tissue & Cutlery</span>
+                </button>
+                <button onclick="sendWaiterCall('টেবিল পরিষ্কার করুন (Clean Table)')" class="p-3.5 rounded-2xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition flex flex-col gap-1">
+                    <span class="text-xl">✨</span>
+                    <span class="font-bold text-sm text-slate-800">টেবিল পরিষ্কার</span>
+                    <span class="text-[11px] text-slate-500">Clean Table</span>
+                </button>
+                <button onclick="sendWaiterCall('সরাসরি কথা বলতে চাই (Assistance)')" class="p-3.5 rounded-2xl border border-slate-200 hover:border-amber-500 hover:bg-amber-50 text-left transition flex flex-col gap-1">
+                    <span class="text-xl">🙋‍♂️</span>
+                    <span class="font-bold text-sm text-slate-800">জরুরি সহায়তা</span>
+                    <span class="text-[11px] text-slate-500">Call Waiter Now</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Customer Bill & Digital Payment Modal -->
+    <div id="bill-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="p-5 bg-slate-900 text-white flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-lg">ডিজিটাল বিল ও পেমেন্ট</h3>
+                    <p class="text-xs text-slate-400" id="bill-modal-table-info">Table #04</p>
+                </div>
+                <button onclick="closeBillModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div id="bill-modal-body" class="p-5 overflow-y-auto flex-1">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Admin Receipt Print Preview Modal -->
+    <div id="admin-receipt-modal" class="hidden fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-print text-amber-400"></i>
+                    <h3 class="font-bold text-base">অ্যাডমিন ইনভয়েস ও বিল প্রিন্ট</h3>
+                </div>
+                <button onclick="closeAdminReceiptModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="admin-receipt-body" class="p-5 overflow-y-auto flex-1">
+                <!-- Populated dynamically -->
+            </div>
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+                <button onclick="closeAdminReceiptModal()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-sm">বন্ধ করুন</button>
+                <button onclick="window.print()" class="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 shadow">
+                    <i class="fa-solid fa-print text-amber-400"></i>
+                    <span>রিসিট প্রিন্ট করুন (Print Bill)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Wi-Fi QR Info Modal -->
+    <div id="wifi-qr-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-xs rounded-3xl shadow-2xl p-6 text-center">
+            <h3 class="font-bold text-lg text-slate-900">Wi-Fi QR স্ক্যান করুন</h3>
+            <p class="text-xs text-slate-500 mt-1" id="qr-modal-ssid">SwadBangla_Guest_5G</p>
+            <div class="my-4 p-3 bg-slate-50 rounded-2xl border border-slate-200 inline-flex items-center justify-center">
+                <div id="customer-wifi-qr-box" class="bg-white p-2 rounded-xl border border-slate-100"></div>
+            </div>
+            <p class="text-[11px] text-slate-500 font-inter mb-4" id="qr-modal-pass-info">Security: Open Network</p>
+            <button onclick="toggleWifiQrModal(false)" class="w-full py-2.5 bg-slate-900 text-white font-bold rounded-xl text-sm">বন্ধ করুন</button>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. DEFAULT MENU DATA (Seeded on first load, editable via Admin Portal)
+        // =========================================================================
+        const DEFAULT_MENU_ITEMS = [
+            {
+                id: 1,
+                nameBn: "পুরান ঢাকার স্পেশাল কাচ্চি বিরিয়ানি",
+                nameEn: "Old Dhaka Special Kacchi Biryani",
+                category: "বিরিয়ানি",
+                price: 380,
+                emoji: "🍛",
+                image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80",
+                tag: "বেস্টসেলার",
+                spicy: true,
+                available: true,
+                desc: "খাসির মাংস, বাসমতি চাল, আলু ও শাহী মসলায় দমে রান্না করা স্পেশাল কাচ্চি।"
+            },
+            {
+                id: 2,
+                nameBn: "চিকেন রোস্ট ও পোলাও প্যাকেজ",
+                nameEn: "Shahi Chicken Roast & Polao",
+                category: "বিরিয়ানি",
+                price: 290,
+                emoji: "🍗",
+                image: "https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=600&q=80",
+                tag: "জনপ্রিয়",
+                spicy: false,
+                available: true,
+                desc: "চিনিগুঁড়া চালের শাহী পোলাও সাথে ঘিয়ে ভাজা ক্রিমি চিকেন রোস্ট ও জালি কাবাব।"
+            },
+            {
+                id: 3,
+                nameBn: "বিফ ভুনা খিচুড়ি",
+                nameEn: "Beef Bhuna Khichuri",
+                category: "মূল খাবার",
+                price: 320,
+                emoji: "🍲",
+                image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=600&q=80",
+                tag: "স্পেশাল",
+                spicy: true,
+                available: true,
+                desc: "মুগ ডাল ও সুগন্ধি চালের খিচুড়ির সাথে কষানো গরুর মাংস ও আচার।"
+            },
+            {
+                id: 4,
+                nameBn: "চিকেন তান্দুরি ও বাটার নান",
+                nameEn: "Tandoori Chicken with Butter Naan",
+                category: "মূল খাবার",
+                price: 260,
+                emoji: "🫓",
+                image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=600&q=80",
+                tag: "",
+                spicy: true,
+                available: true,
+                desc: "কয়লার আগুনে পোড়ানো কোয়ার্টার তান্দুরি চিকেন, ২টি বাটার নান ও পুদিনা চাটনি।"
+            },
+            {
+                id: 5,
+                nameBn: "ক্রিস্পি চিকেন উইংস (৬ পিস)",
+                nameEn: "Crispy Naga Chicken Wings",
+                category: "ভাজাপোড়া",
+                price: 220,
+                emoji: "🍖",
+                image: "https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=600&q=80",
+                tag: "ঝাল",
+                spicy: true,
+                available: true,
+                desc: "মচমচে ফ্রাইড চিকেন উইংস সাথে স্পেশাল নাগা হানি গ্লেজ সস।"
+            },
+            {
+                id: 6,
+                nameBn: "চিকেন কর্ন স্যুপ",
+                nameEn: "Thai / Chicken Corn Soup",
+                category: "ভাজাপোড়া",
+                price: 160,
+                emoji: "🥣",
+                image: "https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=600&q=80",
+                tag: "",
+                spicy: false,
+                available: true,
+                desc: "গরম গরম চিকেন ও সুইট কর্ন স্যুপ, সাথে ক্রিস্পি ওনথন।"
+            },
+            {
+                id: 7,
+                nameBn: "স্পেশাল শাহী বোরহানি",
+                nameEn: "Spiced Mint Borhani",
+                category: "পানীয়",
+                price: 80,
+                emoji: "🥤",
+                image: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=600&q=80",
+                tag: "সতেজ",
+                spicy: false,
+                available: true,
+                desc: "টক দই, পুদিনা ও বিশেষ মসলায় তৈরি হজমকারক ঐতিহ্যবাহী বোরহানি।"
+            },
+            {
+                id: 8,
+                nameBn: "ফ্রেশ ম্যাঙ্গো লাচ্ছি",
+                nameEn: "Chilled Mango Lassi",
+                category: "পানীয়",
+                price: 120,
+                emoji: "🥭",
+                image: "https://images.unsplash.com/photo-1546173159-315724a31696?auto=format&fit=crop&w=600&q=80",
+                tag: "",
+                spicy: false,
+                available: true,
+                desc: "মিষ্টি আম ও ঘন দইয়ের ঠান্ডা স্মুদি।"
+            },
+            {
+                id: 9,
+                nameBn: "শাহী ফিরনি ও জর্দা",
+                nameEn: "Royal Shahi Firni",
+                category: "মিষ্টান্ন",
+                price: 90,
+                emoji: "🍮",
+                image: "https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=600&q=80",
+                tag: "মিষ্টি",
+                spicy: false,
+                available: true,
+                desc: "জাফরান, পেস্তা বাদাম ও ঘন দুধে তৈরি মাটির হাঁড়ির ফিরনি।"
+            }
+        ];
+
+        const CATEGORIES = ["সব খাবার", "বিরিয়ানি", "মূল খাবার", "ভাজাপোড়া", "পানীয়", "মিষ্টান্ন"];
+
+        // =========================================================================
+        // 2. APPLICATION STATE (Persisted in localStorage)
+        // =========================================================================
+        const STORAGE_KEY = 'swad_bangla_qr_system_v2';
+        const SESSION_AUTH_KEY = 'swad_bangla_admin_logged_in';
+
+        let appState = {
+            restaurantName: 'স্বাদ বাংলা রেস্টুরেন্ট',
+            wifiSsid: 'SwadBangla_Guest_5G',
+            wifiPassword: '',
+            vatRate: 5,
+            tables: ['Table #01', 'Table #02', 'Table #03', 'Table #04', 'Table #05 (VIP)'],
+            adminCreds: {
+                email: 'admin@swadbangla.com',
+                password: 'admin123'
+            },
+            paymentAccounts: {
+                bkash: '01711-223344 (Merchant)',
+                nagad: '01811-223344 (Merchant)',
+                upay: '01911-223344 (Merchant)',
+                bank: 'Dutch-Bangla Bank | A/C: 105.110.29384 | Dhanmondi Br.',
+                banglaQr: 'BANGLAQR-SWADBANGLA-9901'
+            },
+            menuItems: JSON.parse(JSON.stringify(DEFAULT_MENU_ITEMS)),
+            currentTable: 'Table #04',
+            wifiConnected: false,
+            selectedCategory: 'সব খাবার',
+            cart: [], // { id, qty }
+            orders: [],
+            waiterCalls: []
+        };
+
+        let isAdminAuthenticated = sessionStorage.getItem(SESSION_AUTH_KEY) === 'true';
+
+        // Load or Seed Initial State
+        function initState() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    appState = { ...appState, ...parsed };
+                    if (!appState.menuItems || !Array.isArray(appState.menuItems)) {
+                        appState.menuItems = JSON.parse(JSON.stringify(DEFAULT_MENU_ITEMS));
+                    }
+                    if (!appState.tables || appState.tables.length === 0) {
+                        appState.tables = ['Table #01', 'Table #02', 'Table #03', 'Table #04'];
+                    }
+                } catch (e) {
+                    seedDemoOrders();
+                }
+            } else {
+                seedDemoOrders();
+            }
+
+            // Check URL parameter ?table=Table #02 when scanned from QR code
+            const urlParams = new URLSearchParams(window.location.search);
+            const scannedTable = urlParams.get('table');
+            if (scannedTable && appState.tables.includes(scannedTable)) {
+                appState.currentTable = scannedTable;
+            }
+
+            applyRestaurantBranding();
+            populateTableSelector();
+            updateBadges();
+        }
+
+        function seedDemoOrders() {
+            appState.orders = [
+                {
+                    id: 'ORD-101',
+                    table: 'Table #02',
+                    items: [
+                        { nameBn: 'পুরান ঢাকার স্পেশাল কাচ্চি বিরিয়ানি', price: 380, qty: 2 },
+                        { nameBn: 'স্পেশাল শাহী বোরহানি', price: 80, qty: 2 }
+                    ],
+                    note: 'আলু একটু বড় সাইজের দিবেন',
+                    status: 'cooking',
+                    timestamp: new Date(Date.now() - 8 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    paid: false
+                }
+            ];
+            appState.waiterCalls = [
+                {
+                    id: 'CALL-1',
+                    table: 'Table #01',
+                    reason: 'পানি প্রয়োজন (Water)',
+                    time: new Date(Date.now() - 2 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    status: 'active'
+                }
+            ];
+            saveState();
+        }
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            updateBadges();
+        }
+
+        function resetDemoData() {
+            appState.cart = [];
+            seedDemoOrders();
+            renderAllViews();
+            showToast('ডেমো অর্ডার ও কল ডাটা নতুন করে সেট করা হয়েছে!', 'info');
+        }
+
+        function applyRestaurantBranding() {
+            document.getElementById('topbar-restaurant-name').textContent = appState.restaurantName;
+            document.getElementById('gate-restaurant-name').textContent = appState.restaurantName;
+            document.getElementById('menu-restaurant-name').textContent = appState.restaurantName;
+            document.getElementById('gate-wifi-ssid').textContent = appState.wifiSsid;
+            document.getElementById('qr-modal-ssid').textContent = appState.wifiSsid;
+
+            const passEl = document.getElementById('gate-wifi-password');
+            const modalPassEl = document.getElementById('qr-modal-pass-info');
+            if (appState.wifiPassword && appState.wifiPassword.trim() !== '') {
+                passEl.textContent = appState.wifiPassword;
+                modalPassEl.textContent = `Password: ${appState.wifiPassword}`;
+            } else {
+                passEl.textContent = 'পাসওয়ার্ড মুক্ত (Auto-Connect)';
+                modalPassEl.textContent = 'Security: Open Network (No Password)';
+            }
+        }
+
+        function populateTableSelector() {
+            const selector = document.getElementById('table-selector');
+            if (!selector) return;
+            selector.innerHTML = appState.tables.map(t =>
+                `<option value="${t}" class="text-slate-900" ${t === appState.currentTable ? 'selected' : ''}>${t}</option>`
+            ).join('');
+            document.getElementById('header-table-label').textContent = appState.currentTable;
+            document.getElementById('cart-modal-table').textContent = appState.currentTable;
+        }
+
+        // =========================================================================
+        // 3. PORTAL SWITCHING & ADMIN AUTHENTICATION
+        // =========================================================================
+        function openPortal(portal) {
+            const custPortal = document.getElementById('portal-customer');
+            const adminPortal = document.getElementById('portal-admin');
+            const custBtn = document.getElementById('portal-btn-customer');
+            const adminBtn = document.getElementById('portal-btn-admin');
+
+            if (portal === 'customer') {
+                custPortal.classList.remove('hidden');
+                adminPortal.classList.add('hidden');
+                custBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-amber-500 text-slate-950 shadow';
+                adminBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-slate-800 text-slate-300 hover:text-white border border-slate-700 relative';
+                renderMenu();
+                renderCustomerLiveOrders();
+            } else {
+                custPortal.classList.add('hidden');
+                adminPortal.classList.remove('hidden');
+                adminBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-amber-500 text-slate-950 shadow relative';
+                custBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 bg-slate-800 text-slate-300 hover:text-white border border-slate-700';
+
+                if (isAdminAuthenticated) {
+                    document.getElementById('admin-login-screen').classList.add('hidden');
+                    document.getElementById('admin-dashboard-screen').classList.remove('hidden');
+                    renderAdminMenuTable();
+                    renderKitchenDashboard();
+                    renderWaiterDashboard();
+                } else {
+                    document.getElementById('admin-login-screen').classList.remove('hidden');
+                    document.getElementById('admin-dashboard-screen').classList.add('hidden');
+                }
+            }
+        }
+
+        function fillDemoCredentials() {
+            document.getElementById('admin-email-input').value = appState.adminCreds.email;
+            document.getElementById('admin-pass-input').value = appState.adminCreds.password;
+        }
+
+        function togglePasswordVisibility() {
+            const input = document.getElementById('admin-pass-input');
+            const icon = document.getElementById('pass-eye-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('admin-email-input').value.trim();
+            const pass = document.getElementById('admin-pass-input').value;
+            const errEl = document.getElementById('login-error-msg');
+
+            if (email.toLowerCase() === appState.adminCreds.email.toLowerCase() && pass === appState.adminCreds.password) {
+                isAdminAuthenticated = true;
+                sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+                errEl.classList.add('hidden');
+                document.getElementById('admin-login-screen').classList.add('hidden');
+                document.getElementById('admin-dashboard-screen').classList.remove('hidden');
+                switchAdminTab('menu-manager');
+                showToast('অ্যাডমিন প্যানেলে স্বাগতম!', 'success');
+            } else {
+                errEl.classList.remove('hidden');
+            }
+        }
+
+        function logoutAdmin() {
+            isAdminAuthenticated = false;
+            sessionStorage.removeItem(SESSION_AUTH_KEY);
+            document.getElementById('admin-pass-input').value = '';
+            document.getElementById('admin-dashboard-screen').classList.add('hidden');
+            document.getElementById('admin-login-screen').classList.remove('hidden');
+            showToast('অ্যাডমিন প্যানেল থেকে লগআউট করা হয়েছে।', 'info');
+        }
+
+        function switchAdminTab(tab) {
+            const tabs = ['menu-manager', 'kitchen', 'waiter', 'settings'];
+            tabs.forEach(t => {
+                document.getElementById(`admin-content-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`admin-tab-${t}`);
+                btn.classList.remove('bg-slate-900', 'text-white');
+                btn.classList.add('bg-slate-100', 'text-slate-700');
+            });
+
+            document.getElementById(`admin-content-${tab}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`admin-tab-${tab}`);
+            activeBtn.classList.add('bg-slate-900', 'text-white');
+            activeBtn.classList.remove('bg-slate-100', 'text-slate-700');
+
+            if (tab === 'menu-manager') renderAdminMenuTable();
+            if (tab === 'kitchen') renderKitchenDashboard();
+            if (tab === 'waiter') renderWaiterDashboard();
+            if (tab === 'settings') loadSettingsForm();
+        }
+
+        // =========================================================================
+        // 4. ADMIN CRUD: ADD, EDIT, REMOVE FOOD ITEMS & SETTINGS
+        // =========================================================================
+        function renderAdminMenuTable() {
+            const tbody = document.getElementById('admin-menu-tbody');
+            const search = (document.getElementById('admin-menu-search')?.value || '').toLowerCase();
+
+            // Update Stats
+            document.getElementById('stat-total-items').textContent = appState.menuItems.length;
+            document.getElementById('stat-total-categories').textContent = CATEGORIES.length - 1;
+            document.getElementById('stat-active-orders').textContent = appState.orders.filter(o => o.status !== 'served').length;
+            document.getElementById('stat-total-tables').textContent = appState.tables.length;
+
+            const filtered = appState.menuItems.filter(item =>
+                item.nameBn.toLowerCase().includes(search) ||
+                item.nameEn.toLowerCase().includes(search) ||
+                item.category.toLowerCase().includes(search)
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-10 text-center text-slate-400">কোনো খাবার পাওয়া যায়নি। নতুন খাবার যোগ করুন।</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(item => `
+                <tr class="hover:bg-slate-50/80 transition">
+                    <td class="py-3.5 px-4">
+                        <div class="flex items-center gap-3">
+                            ${item.image ? `
+                                <img src="${item.image}" alt="${item.nameBn}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" class="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0">
+                                <span style="display:none" class="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 items-center justify-center text-xl shrink-0">${item.emoji || '🍽️'}</span>
+                            ` : `
+                                <span class="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-xl shrink-0">${item.emoji || '🍽️'}</span>
+                            `}
+                            <div>
+                                <p class="font-bold text-slate-900">${item.nameBn}</p>
+                                <p class="text-xs text-slate-400 font-inter">${item.nameEn}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold">${item.category}</span>
+                    </td>
+                    <td class="py-3.5 px-4 font-bold text-slate-900">৳${item.price}</td>
+                    <td class="py-3.5 px-4">
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <button onclick="toggleItemAvailability(${item.id})" class="px-2.5 py-1 rounded-full text-xs font-bold transition ${item.available !== false ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' : 'bg-rose-100 text-rose-800 hover:bg-rose-200'}">
+                                ${item.available !== false ? '● স্টকে আছে' : '○ স্টক শেষ'}
+                            </button>
+                            ${item.tag ? `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">${item.tag}</span>` : ''}
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4 text-right">
+                        <div class="inline-flex items-center gap-1.5">
+                            <button onclick="openFoodFormModal(${item.id})" class="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs transition">
+                                <i class="fa-solid fa-pen-to-square mr-1"></i> এডিট
+                            </button>
+                            <button onclick="deleteFoodItem(${item.id})" class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition">
+                                <i class="fa-solid fa-trash mr-1"></i> রিমুভ
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        let currentFoodImageData = '';
+
+        function updateFoodImagePreview(src, emoji = '🍛') {
+            const box = document.getElementById('food-image-preview-box');
+            if (src) {
+                box.innerHTML = `<img src="${src}" alt="Preview" onerror="this.parentElement.innerHTML='${emoji}'" class="w-full h-full object-cover">`;
+            } else {
+                box.innerHTML = emoji || '🍛';
+            }
+        }
+
+        function handleFoodImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                // Resize image via canvas to keep localStorage fast & lightweight
+                const img = new Image();
+                img.onload = function () {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 480;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    currentFoodImageData = canvas.toDataURL('image/jpeg', 0.8);
+                    document.getElementById('food-image-url').value = '';
+                    updateFoodImagePreview(currentFoodImageData, document.getElementById('food-emoji').value);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function previewFoodImageUrl(url) {
+            currentFoodImageData = url.trim();
+            updateFoodImagePreview(currentFoodImageData, document.getElementById('food-emoji').value);
+        }
+
+        function clearFoodImage() {
+            currentFoodImageData = '';
+            document.getElementById('food-image-file').value = '';
+            document.getElementById('food-image-url').value = '';
+            updateFoodImagePreview('', document.getElementById('food-emoji').value);
+        }
+
+        function openFoodFormModal(itemId = null) {
+            const modal = document.getElementById('food-form-modal');
+            const titleEl = document.getElementById('food-modal-title');
+            const editIdInput = document.getElementById('food-edit-id');
+            document.getElementById('food-image-file').value = '';
+
+            if (itemId) {
+                const item = appState.menuItems.find(m => m.id === itemId);
+                if (!item) return;
+                titleEl.textContent = 'খাবারের তথ্য এডিট করুন';
+                editIdInput.value = item.id;
+                document.getElementById('food-name-bn').value = item.nameBn;
+                document.getElementById('food-name-en').value = item.nameEn;
+                document.getElementById('food-category').value = item.category;
+                document.getElementById('food-price').value = item.price;
+                document.getElementById('food-emoji').value = item.emoji || '🍛';
+                document.getElementById('food-tag').value = item.tag || '';
+                document.getElementById('food-spicy').checked = !!item.spicy;
+                document.getElementById('food-available').checked = item.available !== false;
+                document.getElementById('food-desc').value = item.desc || '';
+
+                currentFoodImageData = item.image || '';
+                document.getElementById('food-image-url').value = (item.image && !item.image.startsWith('data:')) ? item.image : '';
+                updateFoodImagePreview(currentFoodImageData, item.emoji);
+            } else {
+                titleEl.textContent = 'নতুন খাবার যোগ করুন';
+                editIdInput.value = '';
+                document.getElementById('food-name-bn').value = '';
+                document.getElementById('food-name-en').value = '';
+                document.getElementById('food-category').value = 'বিরিয়ানি';
+                document.getElementById('food-price').value = '';
+                document.getElementById('food-emoji').value = '🍛';
+                document.getElementById('food-tag').value = '';
+                document.getElementById('food-spicy').checked = false;
+                document.getElementById('food-available').checked = true;
+                document.getElementById('food-desc').value = '';
+
+                currentFoodImageData = '';
+                document.getElementById('food-image-url').value = '';
+                updateFoodImagePreview('', '🍛');
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function closeFoodFormModal() {
+            document.getElementById('food-form-modal').classList.add('hidden');
+        }
+
+        function saveFoodItem(e) {
+            e.preventDefault();
+            const editId = document.getElementById('food-edit-id').value;
+            const foodData = {
+                nameBn: document.getElementById('food-name-bn').value.trim(),
+                nameEn: document.getElementById('food-name-en').value.trim(),
+                category: document.getElementById('food-category').value,
+                price: Number(document.getElementById('food-price').value),
+                emoji: document.getElementById('food-emoji').value.trim() || '🍽️',
+                image: currentFoodImageData,
+                tag: document.getElementById('food-tag').value.trim(),
+                spicy: document.getElementById('food-spicy').checked,
+                available: document.getElementById('food-available').checked,
+                desc: document.getElementById('food-desc').value.trim()
+            };
+
+            if (editId) {
+                const idx = appState.menuItems.findIndex(m => m.id === Number(editId));
+                if (idx > -1) {
+                    appState.menuItems[idx] = { ...appState.menuItems[idx], ...foodData };
+                    showToast(`"${foodData.nameBn}" সফলভাবে আপডেট করা হয়েছে!`, 'success');
+                }
+            } else {
+                const newItem = {
+                    id: Date.now(),
+                    ...foodData
+                };
+                appState.menuItems.unshift(newItem);
+                showToast(`নতুন খাবার "${foodData.nameBn}" মেনুতে যোগ হয়েছে!`, 'success');
+            }
+
+            saveState();
+            closeFoodFormModal();
+            renderAdminMenuTable();
+            renderMenu();
+        }
+
+        function toggleItemAvailability(itemId) {
+            const item = appState.menuItems.find(m => m.id === itemId);
+            if (item) {
+                item.available = item.available === false ? true : false;
+                saveState();
+                renderAdminMenuTable();
+                renderMenu();
+                showToast(`"${item.nameBn}" স্ট্যাটাস পরিবর্তিত হয়েছে।`, 'info');
+            }
+        }
+
+        function deleteFoodItem(itemId) {
+            const item = appState.menuItems.find(m => m.id === itemId);
+            if (!item) return;
+            appState.menuItems = appState.menuItems.filter(m => m.id !== itemId);
+            appState.cart = appState.cart.filter(c => c.id !== itemId);
+            saveState();
+            renderAdminMenuTable();
+            renderMenu();
+            updateCartUI();
+            showToast(`"${item.nameBn}" মেনু থেকে রিমুভ করা হয়েছে।`, 'info');
+        }
+
+        // Settings & Table Management
+        function loadSettingsForm() {
+            document.getElementById('setting-rest-name').value = appState.restaurantName;
+            document.getElementById('setting-wifi-ssid').value = appState.wifiSsid;
+            document.getElementById('setting-wifi-password').value = appState.wifiPassword || '';
+            document.getElementById('setting-vat-rate').value = appState.vatRate;
+            document.getElementById('setting-admin-email').value = appState.adminCreds.email;
+            document.getElementById('setting-admin-pass').value = appState.adminCreds.password;
+
+            const pay = appState.paymentAccounts || {};
+            document.getElementById('setting-pay-bkash').value = pay.bkash || '';
+            document.getElementById('setting-pay-nagad').value = pay.nagad || '';
+            document.getElementById('setting-pay-upay').value = pay.upay || '';
+            document.getElementById('setting-pay-bank').value = pay.bank || '';
+            document.getElementById('setting-pay-banglaqr').value = pay.banglaQr || '';
+
+            const qrTableSel = document.getElementById('qr-gen-table');
+            if (qrTableSel) {
+                qrTableSel.innerHTML = appState.tables.map(t => `<option value="${t}">${t}</option>`).join('');
+            }
+            const urlInput = document.getElementById('qr-custom-url');
+            if (urlInput && !urlInput.value) {
+                urlInput.value = window.location.href.split('?')[0];
+            }
+
+            renderAdminTablesList();
+            generateAdminQrCode();
+        }
+
+        function saveRestaurantSettings(e) {
+            e.preventDefault();
+            appState.restaurantName = document.getElementById('setting-rest-name').value.trim();
+            appState.wifiSsid = document.getElementById('setting-wifi-ssid').value.trim();
+            appState.wifiPassword = document.getElementById('setting-wifi-password').value.trim();
+            appState.vatRate = Number(document.getElementById('setting-vat-rate').value) || 0;
+            saveState();
+            applyRestaurantBranding();
+            generateAdminQrCode();
+            showToast('রেস্টুরেন্ট ও ওয়াইফাই সেটিংস সংরক্ষিত হয়েছে!', 'success');
+        }
+
+        function savePaymentSettings(e) {
+            e.preventDefault();
+            appState.paymentAccounts = {
+                bkash: document.getElementById('setting-pay-bkash').value.trim(),
+                nagad: document.getElementById('setting-pay-nagad').value.trim(),
+                upay: document.getElementById('setting-pay-upay').value.trim(),
+                bank: document.getElementById('setting-pay-bank').value.trim(),
+                banglaQr: document.getElementById('setting-pay-banglaqr').value.trim()
+            };
+            saveState();
+            showToast('bKash, Nagad, Upay, Bank ও Bangla QR তথ্য সংরক্ষিত হয়েছে!', 'success');
+        }
+
+        function renderAdminTablesList() {
+            const container = document.getElementById('admin-tables-list');
+            if (!container) return;
+            container.innerHTML = appState.tables.map(tbl => `
+                <span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800">
+                    <i class="fa-solid fa-chair text-amber-600"></i>
+                    <span>${tbl}</span>
+                    ${appState.tables.length > 1 ? `
+                        <button type="button" onclick="removeTable('${tbl.replace(/'/g, "\\'")}')" class="text-rose-500 hover:text-rose-700 ml-1" title="টেবিল বাদ দিন">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    ` : ''}
+                </span>
+            `).join('');
+        }
+
+        function addNewTable() {
+            const input = document.getElementById('new-table-name');
+            const name = input.value.trim();
+            if (!name) return;
+            if (appState.tables.includes(name)) {
+                showToast('এই নামের টেবিল ইতিমধ্যে রয়েছে!', 'info');
+                return;
+            }
+            appState.tables.push(name);
+            input.value = '';
+            saveState();
+            populateTableSelector();
+            loadSettingsForm();
+            showToast(`"${name}" যোগ করা হয়েছে!`, 'success');
+        }
+
+        function removeTable(tblName) {
+            if (appState.tables.length <= 1) return;
+            appState.tables = appState.tables.filter(t => t !== tblName);
+            if (appState.currentTable === tblName) {
+                appState.currentTable = appState.tables[0];
+            }
+            saveState();
+            populateTableSelector();
+            loadSettingsForm();
+            showToast(`"${tblName}" মুছে ফেলা হয়েছে।`, 'info');
+        }
+
+        function updateAdminCredentials(e) {
+            e.preventDefault();
+            const newEmail = document.getElementById('setting-admin-email').value.trim();
+            const newPass = document.getElementById('setting-admin-pass').value;
+            if (!newEmail || newPass.length < 4) return;
+            appState.adminCreds.email = newEmail;
+            appState.adminCreds.password = newPass;
+            saveState();
+            showToast('অ্যাডমিন ইমেইল ও পাসওয়ার্ড আপডেট হয়েছে!', 'success');
+        }
+
+        // =========================================================================
+        // 5. REAL SCANNABLE QR CODE GENERATOR & SOUND NOTIFICATIONS
+        // =========================================================================
+        let notificationSynth = null;
+
+        function playNotificationSound() {
+            try {
+                if (typeof Tone === 'undefined') return;
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                if (!notificationSynth) {
+                    notificationSynth = new Tone.Synth().toDestination();
+                }
+                const now = Tone.now();
+                notificationSynth.triggerAttackRelease('C5', '16n', now);
+                notificationSynth.triggerAttackRelease('G5', '16n', now + 0.15);
+            } catch (e) {
+                // Ignore audio autoplay block if user hasn't interacted yet
+            }
+        }
+
+        function buildWifiQrString() {
+            const ssid = appState.wifiSsid.replace(/([\\;,:"])/g, '\\$1');
+            const pass = (appState.wifiPassword || '').replace(/([\\;,:"])/g, '\\$1');
+            if (pass) {
+                return `WIFI:T:WPA;S:${ssid};P:${pass};;`;
+            }
+            return `WIFI:T:nopass;S:${ssid};;`;
+        }
+
+        function generateAdminQrCode() {
+            const container = document.getElementById('admin-qr-canvas-box');
+            if (!container || typeof QRCode === 'undefined') return;
+
+            const type = document.getElementById('qr-gen-type').value;
+            const tableBox = document.getElementById('qr-table-select-box');
+            const tableVal = document.getElementById('qr-gen-table').value || appState.tables[0];
+            const baseUrl = (document.getElementById('qr-custom-url').value || window.location.href.split('?')[0]).trim();
+
+            let qrPayload = '';
+            if (type === 'wifi') {
+                tableBox.classList.add('hidden');
+                qrPayload = buildWifiQrString();
+                document.getElementById('qr-preview-title').textContent = `Wi-Fi: ${appState.wifiSsid}`;
+                document.getElementById('qr-preview-subtitle').textContent = appState.wifiPassword ? `পাসওয়ার্ড: ${appState.wifiPassword}` : 'ওপেন নেটওয়ার্ক (পাসওয়ার্ড ছাড়া)';
+            } else {
+                tableBox.classList.remove('hidden');
+                const sep = baseUrl.includes('?') ? '&' : '?';
+                qrPayload = `${baseUrl}${sep}table=${encodeURIComponent(tableVal)}`;
+                document.getElementById('qr-preview-title').textContent = `${appState.restaurantName} • ${tableVal}`;
+                document.getElementById('qr-preview-subtitle').textContent = 'স্ক্যান করে Wi-Fi কানেক্ট ও মেনু দেখুন';
+            }
+
+            document.getElementById('qr-encoded-text').textContent = qrPayload;
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: qrPayload,
+                width: 156,
+                height: 156,
+                colorDark: '#0f172a',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.L
+            });
+        }
+
+        function downloadGeneratedQr() {
+            const container = document.getElementById('admin-qr-canvas-box');
+            const canvas = container.querySelector('canvas');
+            const img = container.querySelector('img');
+            let dataUrl = '';
+
+            if (canvas) {
+                dataUrl = canvas.toDataURL('image/png');
+            } else if (img && img.src) {
+                dataUrl = img.src;
+            }
+
+            if (!dataUrl) {
+                showToast('QR কোড প্রস্তুত নয়!', 'info');
+                return;
+            }
+
+            const link = document.createElement('a');
+            const title = document.getElementById('qr-preview-title').textContent.replace(/[^a-zA-Z0-9_-]/g, '_');
+            link.download = `QR_${title}.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast('QR কোড ইমেজ ডাউনলোড শুরু হয়েছে!', 'success');
+        }
+
+        // =========================================================================
+        // 6. CUSTOMER WI-FI GATE & MENU INTERACTIONS
+        // =========================================================================
+        function changeTable(newTable) {
+            appState.currentTable = newTable;
+            saveState();
+            document.getElementById('header-table-label').textContent = newTable;
+            document.getElementById('cart-modal-table').textContent = newTable;
+        }
+
+        function toggleWifiQrModal(show) {
+            const modal = document.getElementById('wifi-qr-modal');
+            if (!show) {
+                modal.classList.add('hidden');
+                return;
+            }
+            modal.classList.remove('hidden');
+            if (typeof QRCode !== 'undefined') {
+                const box = document.getElementById('customer-wifi-qr-box');
+                box.innerHTML = '';
+                new QRCode(box, {
+                    text: buildWifiQrString(),
+                    width: 152,
+                    height: 152,
+                    colorDark: '#0f172a',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+            }
+        }
+
+        function connectWifiAndEnterMenu() {
+            const btn = document.getElementById('connect-wifi-btn');
+            const progressBox = document.getElementById('wifi-progress-container');
+            const progressBar = document.getElementById('wifi-progress-bar');
+            const percentText = document.getElementById('wifi-percent');
+            const statusText = document.getElementById('wifi-status-text');
+
+            btn.disabled = true;
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            progressBox.classList.remove('hidden');
+
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 25;
+                progressBar.style.width = `${progress}%`;
+                percentText.textContent = `${progress}%`;
+
+                if (progress === 50) {
+                    statusText.textContent = 'আইপি অ্যাড্রেস যাচাই করা হচ্ছে...';
+                } else if (progress === 75) {
+                    statusText.textContent = 'ডিজিটাল মেনু লোড হচ্ছে...';
+                } else if (progress >= 100) {
+                    clearInterval(interval);
+                    statusText.textContent = 'ওয়াইফাই সফলভাবে যুক্ত হয়েছে!';
+                    appState.wifiConnected = true;
+                    saveState();
+                    playNotificationSound();
+
+                    setTimeout(() => {
+                        document.getElementById('wifi-gate-screen').classList.add('hidden');
+                        document.getElementById('customer-menu-screen').classList.remove('hidden');
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                        progressBox.classList.add('hidden');
+                        progressBar.style.width = '0%';
+                        renderCategories();
+                        renderMenu();
+                        renderCustomerLiveOrders();
+                        updateCartUI();
+                        showToast(`স্বাগতম! ${appState.wifiSsid} যুক্ত হয়েছে।`, 'success');
+                    }, 350);
+                }
+            }, 180);
+        }
+
+        function disconnectWifiGate() {
+            document.getElementById('customer-menu-screen').classList.add('hidden');
+            document.getElementById('wifi-gate-screen').classList.remove('hidden');
+            populateTableSelector();
+        }
+
+        function renderCategories() {
+            const container = document.getElementById('category-tabs');
+            if (!container) return;
+            container.innerHTML = CATEGORIES.map(cat => {
+                const active = appState.selectedCategory === cat;
+                return `
+                    <button onclick="selectCategory('${cat}')" class="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${active ? 'bg-amber-500 text-slate-950 shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+                        ${cat}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectCategory(cat) {
+            appState.selectedCategory = cat;
+            renderCategories();
+            renderMenu();
+        }
+
+        function renderMenu() {
+            const grid = document.getElementById('menu-grid');
+            if (!grid) return;
+            renderCategories();
+
+            const query = (document.getElementById('menu-search')?.value || '').toLowerCase();
+            const items = appState.menuItems.filter(item => {
+                const matchCat = appState.selectedCategory === 'সব খাবার' || item.category === appState.selectedCategory;
+                const matchSearch = item.nameBn.toLowerCase().includes(query) || item.nameEn.toLowerCase().includes(query) || (item.desc || '').toLowerCase().includes(query);
+                return matchCat && matchSearch;
+            });
+
+            if (items.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 bg-white rounded-3xl border border-slate-200 text-slate-400">কোনো খাবার পাওয়া যায়নি।</div>`;
+                return;
+            }
+
+            grid.innerHTML = items.map(item => {
+                const cartEntry = appState.cart.find(c => c.id === item.id);
+                const qty = cartEntry ? cartEntry.qty : 0;
+                const isAvailable = item.available !== false;
+
+                return `
+                    <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col justify-between transition hover:shadow-md ${!isAvailable ? 'opacity-65' : ''}">
+                        <div>
+                            <div class="relative h-44 bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center overflow-hidden">
+                                ${item.image ? `
+                                    <img src="${item.image}" alt="${item.nameBn}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" class="w-full h-full object-cover">
+                                    <span style="display:none" class="text-6xl items-center justify-center w-full h-full">${item.emoji || '🍛'}</span>
+                                ` : `
+                                    <span class="text-6xl">${item.emoji || '🍛'}</span>
+                                `}
+                                <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
+                                    ${item.tag ? `<span class="px-2.5 py-1 rounded-full bg-slate-900/85 text-amber-400 text-[11px] font-bold backdrop-blur-xs">${item.tag}</span>` : ''}
+                                    ${item.spicy ? `<span class="px-2 py-1 rounded-full bg-rose-600/90 text-white text-[11px] font-bold">🌶️ ঝাল</span>` : ''}
+                                </div>
+                                ${!isAvailable ? `<div class="absolute inset-0 bg-slate-900/60 flex items-center justify-center"><span class="px-3 py-1 bg-rose-600 text-white text-xs font-bold rounded-full">স্টক শেষ</span></div>` : ''}
+                            </div>
+
+                            <div class="p-4">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <span class="text-[11px] font-semibold text-amber-700">${item.category}</span>
+                                        <h3 class="font-bold text-slate-900 text-base leading-snug">${item.nameBn}</h3>
+                                        <p class="text-xs text-slate-400 font-inter">${item.nameEn}</p>
+                                    </div>
+                                    <span class="font-bold text-lg text-slate-900 shrink-0">৳${item.price}</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-2 line-clamp-2">${item.desc || ''}</p>
+                            </div>
+                        </div>
+
+                        <div class="px-4 pb-4 pt-1">
+                            ${!isAvailable ? `
+                                <button disabled class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-xs cursor-not-allowed">বর্তমানে উপলব্ধ নয়</button>
+                            ` : qty === 0 ? `
+                                <button onclick="updateCartItem(${item.id}, 1)" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-sm transition flex items-center justify-center gap-1.5 shadow-xs">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>অর্ডারে যোগ করুন</span>
+                                </button>
+                            ` : `
+                                <div class="flex items-center justify-between bg-slate-900 text-white rounded-xl p-1">
+                                    <button onclick="updateCartItem(${item.id}, -1)" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center font-bold">
+                                        <i class="fa-solid fa-minus text-xs"></i>
+                                    </button>
+                                    <span class="font-bold text-sm">${qty} টি নির্বাচিত</span>
+                                    <button onclick="updateCartItem(${item.id}, 1)" class="w-9 h-9 rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 flex items-center justify-center font-bold">
+                                        <i class="fa-solid fa-plus text-xs"></i>
+                                    </button>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateCartItem(itemId, delta) {
+            const idx = appState.cart.findIndex(c => c.id === itemId);
+            if (idx > -1) {
+                appState.cart[idx].qty += delta;
+                if (appState.cart[idx].qty <= 0) {
+                    appState.cart.splice(idx, 1);
+                }
+            } else if (delta > 0) {
+                appState.cart.push({ id: itemId, qty: 1 });
+            }
+            saveState();
+            renderMenu();
+            updateCartUI();
+            if (!document.getElementById('cart-drawer').classList.contains('hidden')) {
+                renderCartDrawerItems();
+            }
+        }
+
+        function updateCartUI() {
+            const bar = document.getElementById('floating-cart-bar');
+            const countBadge = document.getElementById('cart-count-badge');
+            const totalPriceEl = document.getElementById('cart-total-price');
+            if (!bar) return;
+
+            let totalQty = 0;
+            let totalPrice = 0;
+            appState.cart.forEach(c => {
+                const item = appState.menuItems.find(m => m.id === c.id);
+                if (item) {
+                    totalQty += c.qty;
+                    totalPrice += item.price * c.qty;
+                }
+            });
+
+            if (totalQty > 0) {
+                bar.classList.remove('hidden');
+                countBadge.textContent = totalQty;
+                totalPriceEl.textContent = totalPrice;
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        function openCartDrawer() {
+            document.getElementById('cart-modal-table').textContent = appState.currentTable;
+            renderCartDrawerItems();
+            document.getElementById('cart-drawer').classList.remove('hidden');
+        }
+
+        function closeCartDrawer() {
+            document.getElementById('cart-drawer').classList.add('hidden');
+        }
+
+        function renderCartDrawerItems() {
+            const container = document.getElementById('cart-items-container');
+            const subtotalEl = document.getElementById('drawer-subtotal');
+            let subtotal = 0;
+
+            if (appState.cart.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-8">আপনার কার্ট খালি রয়েছে।</p>`;
+                subtotalEl.textContent = '0';
+                return;
+            }
+
+            container.innerHTML = appState.cart.map(c => {
+                const item = appState.menuItems.find(m => m.id === c.id);
+                if (!item) return '';
+                const lineTotal = item.price * c.qty;
+                subtotal += lineTotal;
+                return `
+                    <div class="flex items-center justify-between gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${item.emoji || '🍛'}</span>
+                            <div>
+                                <h4 class="font-bold text-sm text-slate-900">${item.nameBn}</h4>
+                                <p class="text-xs text-slate-500">৳${item.price} × ${c.qty} = <strong class="text-slate-800">৳${lineTotal}</strong></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="updateCartItem(${item.id}, -1)" class="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold text-xs">-</button>
+                            <span class="w-6 text-center font-bold text-xs">${c.qty}</span>
+                            <button onclick="updateCartItem(${item.id}, 1)" class="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs">+</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            subtotalEl.textContent = subtotal;
+        }
+
+        function submitOrderToKitchen() {
+            if (appState.cart.length === 0) return;
+
+            const orderItems = appState.cart.map(c => {
+                const item = appState.menuItems.find(m => m.id === c.id);
+                return item ? { nameBn: item.nameBn, price: item.price, qty: c.qty } : null;
+            }).filter(Boolean);
+
+            const note = document.getElementById('kitchen-note-input').value.trim();
+            const newOrder = {
+                id: 'ORD-' + Math.floor(100 + Math.random() * 900),
+                table: appState.currentTable,
+                items: orderItems,
+                note: note,
+                status: 'pending',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                paid: false
+            };
+
+            appState.orders.unshift(newOrder);
+            appState.cart = [];
+            document.getElementById('kitchen-note-input').value = '';
+            saveState();
+
+            closeCartDrawer();
+            renderMenu();
+            updateCartUI();
+            renderCustomerLiveOrders();
+            renderKitchenDashboard();
+            renderWaiterDashboard();
+            playNotificationSound();
+            showToast(`অর্ডার #${newOrder.id} সরাসরি কিচেনে পাঠানো হয়েছে!`, 'success');
+        }
+
+        function renderCustomerLiveOrders() {
+            const tracker = document.getElementById('customer-live-order-tracker');
+            const list = document.getElementById('customer-active-orders-list');
+            if (!tracker || !list) return;
+
+            const tableOrders = appState.orders.filter(o => o.table === appState.currentTable && !o.paid);
+            if (tableOrders.length === 0) {
+                tracker.classList.add('hidden');
+                return;
+            }
+
+            tracker.classList.remove('hidden');
+            const statusLabels = {
+                pending: { text: 'কিচেনে গৃহীত হয়েছে', badge: 'bg-amber-100 text-amber-800', icon: '⏳' },
+                cooking: { text: 'শেফ রান্না করছেন', badge: 'bg-orange-100 text-orange-800', icon: '🔥' },
+                ready: { text: 'খাবার প্রস্তুত (Ready)', badge: 'bg-emerald-100 text-emerald-800', icon: '✅' },
+                served: { text: 'টেবিলে পরিবেশিত', badge: 'bg-sky-100 text-sky-800', icon: '🍽️' }
+            };
+
+            list.innerHTML = tableOrders.map(ord => {
+                const st = statusLabels[ord.status] || statusLabels.pending;
+                const itemsSummary = ord.items.map(i => `${i.nameBn} (${i.qty})`).join(', ');
+                return `
+                    <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-xs font-inter text-slate-900">#${ord.id}</span>
+                                <span class="text-[11px] text-slate-400">${ord.timestamp}</span>
+                            </div>
+                            <p class="text-xs text-slate-700 mt-0.5">${itemsSummary}</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold ${st.badge} self-start sm:self-center shrink-0">
+                            ${st.icon} ${st.text}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // =========================================================================
+        // 7. WAITER CALLS & KITCHEN DISPLAY SYSTEM (KDS)
+        // =========================================================================
+        function openWaiterCallModal() {
+            document.getElementById('waiter-call-modal').classList.remove('hidden');
+        }
+
+        function closeWaiterCallModal() {
+            document.getElementById('waiter-call-modal').classList.add('hidden');
+        }
+
+        function sendWaiterCall(reason) {
+            const newCall = {
+                id: 'CALL-' + Date.now(),
+                table: appState.currentTable,
+                reason: reason,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                status: 'active'
+            };
+            appState.waiterCalls.unshift(newCall);
+            saveState();
+            closeWaiterCallModal();
+            renderWaiterDashboard();
+            playNotificationSound();
+            showToast(`ওয়েটারকে জানানো হয়েছে (${reason})। শীঘ্রই আসছেন!`, 'success');
+        }
+
+        function resolveWaiterCall(callId) {
+            appState.waiterCalls = appState.waiterCalls.filter(c => c.id !== callId);
+            saveState();
+            renderWaiterDashboard();
+            showToast('ওয়েটার কল সম্পন্ন হিসেবে চিহ্নিত হয়েছে।', 'info');
+        }
+
+        function renderKitchenDashboard() {
+            const grid = document.getElementById('kitchen-orders-grid');
+            const countEl = document.getElementById('kds-active-count');
+            if (!grid) return;
+
+            const activeOrders = appState.orders.filter(o => o.status !== 'served');
+            if (countEl) countEl.textContent = activeOrders.length;
+
+            if (activeOrders.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full bg-slate-800/60 border border-slate-700 rounded-3xl p-12 text-center">
+                        <p class="text-3xl mb-2">👨‍🍳</p>
+                        <h3 class="font-bold text-lg text-white">বর্তমানে কোনো পেন্ডিং অর্ডার নেই</h3>
+                        <p class="text-slate-400 text-sm mt-1">কাস্টমার অর্ডার করলে সাথে সাথে এখানে KOT টিকিট চলে আসবে</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = activeOrders.map(ord => {
+                const borderClass = ord.status === 'pending' ? 'border-amber-500' : ord.status === 'cooking' ? 'border-orange-500' : 'border-emerald-500';
+                return `
+                    <div class="bg-slate-800 rounded-3xl border-2 ${borderClass} p-5 flex flex-col justify-between shadow-xl">
+                        <div>
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+                                <div>
+                                    <span class="px-3 py-1 rounded-xl bg-amber-500 text-slate-950 font-bold text-sm">${ord.table}</span>
+                                    <span class="text-xs font-inter text-slate-400 ml-2">#${ord.id}</span>
+                                </div>
+                                <span class="text-xs text-slate-400"><i class="fa-regular fa-clock mr-1"></i>${ord.timestamp}</span>
+                            </div>
+
+                            <ul class="my-4 space-y-2.5">
+                                ${ord.items.map(i => `
+                                    <li class="flex items-center justify-between text-sm bg-slate-900/70 px-3 py-2 rounded-xl">
+                                        <span class="font-semibold text-white">${i.nameBn}</span>
+                                        <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold">× ${i.qty}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+
+                            ${ord.note ? `
+                                <div class="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs text-rose-200 mb-4">
+                                    <strong class="text-rose-400">বিশেষ নোট:</strong> ${ord.note}
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 pt-2">
+                            <button onclick="updateOrderStatus('${ord.id}', 'cooking')" class="py-2.5 rounded-xl font-bold text-xs transition ${ord.status === 'cooking' ? 'bg-orange-500 text-white' : 'bg-slate-700 hover:bg-orange-600 text-slate-200'}">
+                                🔥 রান্না শুরু
+                            </button>
+                            <button onclick="updateOrderStatus('${ord.id}', 'ready')" class="py-2.5 rounded-xl font-bold text-xs transition ${ord.status === 'ready' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 hover:bg-emerald-600 text-slate-200'}">
+                                ✅ প্রস্তুত
+                            </button>
+                            <button onclick="updateOrderStatus('${ord.id}', 'served')" class="py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition">
+                                🍽️ পরিবেশিত
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateOrderStatus(orderId, newStatus) {
+            const ord = appState.orders.find(o => o.id === orderId);
+            if (!ord) return;
+            ord.status = newStatus;
+            saveState();
+            renderKitchenDashboard();
+            renderCustomerLiveOrders();
+            renderWaiterDashboard();
+            showToast(`অর্ডার #${orderId} স্ট্যাটাস আপডেট হয়েছে: ${newStatus.toUpperCase()}`, 'info');
+        }
+
+        // =========================================================================
+        // 8. BILLING, DIGITAL PAYMENT (bKash, Nagad, Upay, Bank, Bangla QR) & PRINT
+        // =========================================================================
+        let selectedPaymentMethod = 'bKash';
+
+        function calculateTableBill(tableName) {
+            const tableOrders = appState.orders.filter(o => o.table === tableName);
+            const unpaidOrders = tableOrders.filter(o => !o.paid);
+            const targetOrders = unpaidOrders.length > 0 ? unpaidOrders : tableOrders;
+
+            let subtotal = 0;
+            const mergedItems = [];
+
+            targetOrders.forEach(ord => {
+                ord.items.forEach(i => {
+                    subtotal += i.price * i.qty;
+                    const existing = mergedItems.find(m => m.nameBn === i.nameBn && m.price === i.price);
+                    if (existing) {
+                        existing.qty += i.qty;
+                    } else {
+                        mergedItems.push({ ...i });
+                    }
+                });
+            });
+
+            const vat = Math.round((subtotal * (appState.vatRate || 0)) / 100);
+            const grandTotal = subtotal + vat;
+            const isPaid = tableOrders.length > 0 && unpaidOrders.length === 0;
+
+            return { tableOrders, unpaidOrders, mergedItems, subtotal, vat, grandTotal, isPaid };
+        }
+
+        function openBillModal() {
+            const modal = document.getElementById('bill-modal');
+            const body = document.getElementById('bill-modal-body');
+            document.getElementById('bill-modal-table-info').textContent = appState.currentTable;
+
+            const bill = calculateTableBill(appState.currentTable);
+            if (bill.tableOrders.length === 0) {
+                body.innerHTML = `
+                    <div class="text-center py-8">
+                        <p class="text-4xl mb-2">🧾</p>
+                        <h4 class="font-bold text-slate-800">এই টেবিলে এখনো কোনো অর্ডার নেই</h4>
+                        <p class="text-xs text-slate-500 mt-1">মেনু থেকে খাবার অর্ডার করার পর এখানে বিল দেখতে পাবেন।</p>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            if (bill.isPaid) {
+                const lastPaid = bill.tableOrders[0];
+                body.innerHTML = `
+                    <div class="text-center py-6 space-y-3">
+                        <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center text-3xl">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </div>
+                        <h4 class="font-bold text-xl text-slate-900">বিল পরিশোধিত (PAID)</h4>
+                        <p class="text-xs text-slate-500">মাধ্যম: <strong>${lastPaid.paymentMethod || 'Digital'}</strong> ${lastPaid.trxId ? `| TrxID: ${lastPaid.trxId}` : ''}</p>
+                        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left text-xs space-y-1">
+                            <div class="flex justify-between"><span>সাব-টোটাল:</span><span>৳${bill.subtotal}</span></div>
+                            <div class="flex justify-between"><span>ভ্যাট (${appState.vatRate}%):</span><span>৳${bill.vat}</span></div>
+                            <div class="flex justify-between font-bold text-sm text-slate-900 pt-1 border-t"><span>সর্বমোট পরিশোধিত:</span><span>৳${bill.grandTotal}</span></div>
+                        </div>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            const methods = [
+                { id: 'bKash', label: 'bKash', icon: '📱', color: 'border-pink-500 bg-pink-50 text-pink-800' },
+                { id: 'Nagad', label: 'Nagad', icon: '💳', color: 'border-orange-500 bg-orange-50 text-orange-800' },
+                { id: 'Upay', label: 'Upay', icon: '💠', color: 'border-sky-500 bg-sky-50 text-sky-800' },
+                { id: 'Bank', label: 'Bank', icon: '🏦', color: 'border-indigo-500 bg-indigo-50 text-indigo-800' },
+                { id: 'Bangla QR', label: 'Bangla QR', icon: '🇧🇩', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+                { id: 'Cash', label: 'Cash', icon: '💵', color: 'border-slate-700 bg-slate-100 text-slate-900' }
+            ];
+
+            body.innerHTML = `
+                <div class="space-y-4">
+                    <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 space-y-2">
+                        <h4 class="font-bold text-xs text-slate-500 uppercase">অর্ডারকৃত খাবারের বিবরণ</h4>
+                        ${bill.mergedItems.map(i => `
+                            <div class="flex justify-between text-sm">
+                                <span>${i.nameBn} × ${i.qty}</span>
+                                <span class="font-semibold">৳${i.price * i.qty}</span>
+                            </div>
+                        `).join('')}
+                        <div class="border-t border-slate-200 pt-2 text-xs text-slate-600 space-y-1">
+                            <div class="flex justify-between"><span>সাব-টোটাল</span><span>৳${bill.subtotal}</span></div>
+                            <div class="flex justify-between"><span>ভ্যাট (${appState.vatRate}%)</span><span>৳${bill.vat}</span></div>
+                            <div class="flex justify-between text-base font-bold text-slate-900 pt-1">
+                                <span>সর্বমোট বিল</span>
+                                <span class="text-emerald-700">৳${bill.grandTotal}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-2">পেমেন্ট মাধ্যম নির্বাচন করুন:</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            ${methods.map(m => `
+                                <button type="button" onclick="selectPaymentMethod('${m.id}', ${bill.grandTotal})" id="pay-btn-${m.id.replace(/\s+/g, '')}" class="p-2.5 rounded-xl border-2 text-xs font-bold transition flex flex-col items-center gap-1 ${selectedPaymentMethod === m.id ? m.color : 'border-slate-200 bg-white text-slate-700'}">
+                                    <span class="text-base">${m.icon}</span>
+                                    <span>${m.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div id="payment-gateway-details" class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs"></div>
+
+                    <div id="trx-id-box">
+                        <label class="block text-xs font-bold text-slate-700 mb-1">ট্রানজেকশন আইডি / রেফারেন্স (TrxID):</label>
+                        <input type="text" id="payment-trx-input" placeholder="যেমন: 9H7K2L8P4M (ক্যাশ হলে খালি রাখুন)" class="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-inter focus:border-emerald-500 focus:outline-none">
+                    </div>
+
+                    <button onclick="confirmCustomerPayment(${bill.grandTotal})" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition">
+                        <i class="fa-solid fa-shield-check"></i>
+                        <span>৳${bill.grandTotal} পেমেন্ট সম্পন্ন করুন</span>
+                    </button>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            updatePaymentGatewayDetails(selectedPaymentMethod, bill.grandTotal);
+        }
+
+        function closeBillModal() {
+            document.getElementById('bill-modal').classList.add('hidden');
+        }
+
+        function selectPaymentMethod(method, amount) {
+            selectedPaymentMethod = method;
+            const ids = ['bKash', 'Nagad', 'Upay', 'Bank', 'BanglaQR', 'Cash'];
+            ids.forEach(id => {
+                const btn = document.getElementById(`pay-btn-${id}`);
+                if (btn) {
+                    btn.className = 'p-2.5 rounded-xl border-2 text-xs font-bold transition flex flex-col items-center gap-1 border-slate-200 bg-white text-slate-700';
+                }
+            });
+            const activeBtn = document.getElementById(`pay-btn-${method.replace(/\s+/g, '')}`);
+            if (activeBtn) {
+                activeBtn.className = 'p-2.5 rounded-xl border-2 text-xs font-bold transition flex flex-col items-center gap-1 border-emerald-600 bg-emerald-50 text-emerald-900';
+            }
+            updatePaymentGatewayDetails(method, amount);
+        }
+
+        function updatePaymentGatewayDetails(method, amount) {
+            const box = document.getElementById('payment-gateway-details');
+            const trxBox = document.getElementById('trx-id-box');
+            if (!box) return;
+
+            const pay = appState.paymentAccounts || {};
+            if (trxBox) {
+                trxBox.style.display = method === 'Cash' ? 'none' : 'block';
+            }
+
+            if (method === 'bKash') {
+                box.innerHTML = `<span class="font-bold text-pink-700 block mb-1">📱 bKash পেমেন্ট নির্দেশনা:</span>নম্বর: <strong class="font-inter select-all text-slate-900">${pay.bkash || '01711-223344'}</strong><br>পরিমাণ: <strong>৳${amount}</strong> (Send Money / Payment করে নিচে TrxID দিন)`;
+            } else if (method === 'Nagad') {
+                box.innerHTML = `<span class="font-bold text-orange-700 block mb-1">💳 Nagad পেমেন্ট নির্দেশনা:</span>নম্বর: <strong class="font-inter select-all text-slate-900">${pay.nagad || '01811-223344'}</strong><br>পরিমাণ: <strong>৳${amount}</strong> (Payment / Send Money করে নিচে TrxID দিন)`;
+            } else if (method === 'Upay') {
+                box.innerHTML = `<span class="font-bold text-sky-700 block mb-1">💠 Upay পেমেন্ট নির্দেশনা:</span>নম্বর: <strong class="font-inter select-all text-slate-900">${pay.upay || '01911-223344'}</strong><br>পরিমাণ: <strong>৳${amount}</strong> (পেমেন্ট সম্পন্ন করে নিচে TrxID দিন)`;
+            } else if (method === 'Bank') {
+                box.innerHTML = `<span class="font-bold text-indigo-700 block mb-1">🏦 ব্যাংক ট্রান্সফার তথ্য:</span><strong class="font-inter select-all text-slate-900">${pay.bank || 'City Bank | A/C: 1402938475001'}</strong><br>পরিমাণ: <strong>৳${amount}</strong> (ট্রান্সফার রেফারেন্স নম্বর নিচে লিখুন)`;
+            } else if (method === 'Bangla QR') {
+                const merchantId = (pay.banglaQr || 'BANGLAQR-8801').slice(0, 40);
+                const safeTable = appState.currentTable.replace(/[^\x20-\x7E]/g, '').trim() || 'T01';
+                const qrPayload = `BANGLAQR|ID:${merchantId}|TBL:${safeTable}|AMT:${amount}`;
+                box.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div id="customer-bangla-qr-box" class="bg-white p-1.5 rounded-xl border border-emerald-200 shrink-0"></div>
+                        <div>
+                            <span class="font-bold text-emerald-700 block">🇧🇩 Bangla QR (যেকোনো ব্যাংক/MFS অ্যাপ)</span>
+                            <p class="text-[11px] text-slate-600 mt-0.5">bKash, Nagad, Upay, Rocket বা যেকোনো ব্যাংক অ্যাপ দিয়ে স্ক্যান করে <strong>৳${amount}</strong> পরিশোধ করুন।</p>
+                            <span class="text-[10px] font-inter text-slate-400 block mt-1">${pay.banglaQr || 'BANGLAQR-SWADBANGLA'}</span>
+                        </div>
+                    </div>
+                `;
+                if (typeof QRCode !== 'undefined') {
+                    const qrContainer = document.getElementById('customer-bangla-qr-box');
+                    new QRCode(qrContainer, {
+                        text: qrPayload,
+                        width: 84,
+                        height: 84,
+                        colorDark: '#065f46',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.L
+                    });
+                }
+            } else {
+                box.innerHTML = `<span class="font-bold text-slate-800 block mb-1">💵 ক্যাশ পেমেন্ট (Cash on Table):</span>ওয়েটার আপনার টেবিলে এসে <strong>৳${amount}</strong> নগদ গ্রহণ করবেন।`;
+            }
+        }
+
+        function confirmCustomerPayment(amount) {
+            const trxInput = document.getElementById('payment-trx-input');
+            const trxId = trxInput ? trxInput.value.trim() : '';
+
+            appState.orders.forEach(ord => {
+                if (ord.table === appState.currentTable && !ord.paid) {
+                    ord.paid = true;
+                    ord.paymentMethod = selectedPaymentMethod;
+                    ord.trxId = trxId || (selectedPaymentMethod === 'Cash' ? 'CASH' : 'AUTO-VERIFIED');
+                }
+            });
+
+            saveState();
+            renderCustomerLiveOrders();
+            renderWaiterDashboard();
+            playNotificationSound();
+            openBillModal();
+            showToast(`৳${amount} বিল (${selectedPaymentMethod}) সফলভাবে পরিশোধিত হয়েছে!`, 'success');
+        }
+
+        function renderWaiterDashboard() {
+            const callsList = document.getElementById('waiter-calls-list');
+            const callsCount = document.getElementById('active-calls-count');
+            const billsList = document.getElementById('waiter-bills-list');
+            if (!callsList || !billsList) return;
+
+            callsCount.textContent = `${appState.waiterCalls.length} টি কল`;
+            if (appState.waiterCalls.length === 0) {
+                callsList.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">কোনো পেন্ডিং ওয়েটার কল নেই।</p>`;
+            } else {
+                callsList.innerHTML = appState.waiterCalls.map(c => `
+                    <div class="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-sm text-slate-900">${c.table}</span>
+                                <span class="text-[11px] text-slate-500">${c.time}</span>
+                            </div>
+                            <p class="text-xs font-semibold text-amber-900 mt-0.5">${c.reason}</p>
+                        </div>
+                        <button onclick="resolveWaiterCall('${c.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0">
+                            সমাধান হয়েছে
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            const tablesWithOrders = [...new Set(appState.orders.map(o => o.table))];
+            if (tablesWithOrders.length === 0) {
+                billsList.innerHTML = `<p class="text-center text-xs text-slate-400 py-6">এখনো কোনো টেবিলের বিল তৈরি হয়নি।</p>`;
+                return;
+            }
+
+            billsList.innerHTML = tablesWithOrders.map(tbl => {
+                const bill = calculateTableBill(tbl);
+                const latestOrder = bill.tableOrders[0];
+                return `
+                    <div class="p-4 rounded-2xl border ${bill.isPaid ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/70'} flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-base text-slate-900">${tbl}</span>
+                                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${bill.isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                                    ${bill.isPaid ? `পরিশোধিত (${latestOrder.paymentMethod || 'Paid'})` : 'বিল বকেয়া (Unpaid)'}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">
+                                আইটেম: ${bill.mergedItems.length} টি | সাব-টোটাল: ৳${bill.subtotal} + ভ্যাট: ৳${bill.vat} = <strong class="text-slate-900 text-sm">৳${bill.grandTotal}</strong>
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            ${!bill.isPaid ? `
+                                <button onclick="markTablePaidByAdmin('${tbl.replace(/'/g, "\\'")}')" class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">
+                                    ক্যাশ গ্রহণ করুন
+                                </button>
+                            ` : ''}
+                            <button onclick="openAdminReceiptPrint('${tbl.replace(/'/g, "\\'")}')" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5">
+                                <i class="fa-solid fa-print text-amber-400"></i>
+                                <span>বিল প্রিন্ট</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function markTablePaidByAdmin(tableName) {
+            appState.orders.forEach(ord => {
+                if (ord.table === tableName && !ord.paid) {
+                    ord.paid = true;
+                    ord.paymentMethod = 'Cash (Admin)';
+                    ord.trxId = 'COUNTER-CASH';
+                }
+            });
+            saveState();
+            renderWaiterDashboard();
+            renderCustomerLiveOrders();
+            showToast(`${tableName} এর বিল পরিশোধিত হিসেবে সংরক্ষিত হয়েছে।`, 'success');
+        }
+
+        function openAdminReceiptPrint(tableName) {
+            const bill = calculateTableBill(tableName);
+            const body = document.getElementById('admin-receipt-body');
+            const latestOrder = bill.tableOrders[0] || {};
+            const invNo = 'INV-' + Math.floor(10000 + Math.random() * 90000);
+            const nowStr = new Date().toLocaleString('bn-BD');
+
+            body.innerHTML = `
+                <div id="printable-receipt" class="bg-white p-4 rounded-2xl border border-slate-200 text-slate-900 space-y-3">
+                    <div class="text-center border-b border-dashed border-slate-300 pb-3">
+                        <h2 class="font-bold text-lg">${appState.restaurantName}</h2>
+                        <p class="text-xs text-slate-500">স্মার্ট QR ডাইনিং ও কিচেন ইনভয়েস</p>
+                        <div class="mt-2 flex justify-between text-[11px] font-inter text-slate-600">
+                            <span>Invoice: ${invNo}</span>
+                            <span>${tableName}</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${nowStr}</p>
+                    </div>
+
+                    <table class="w-full text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-500">
+                                <th class="py-1.5 text-left">আইটেম</th>
+                                <th class="py-1.5 text-center">পরিমাণ</th>
+                                <th class="py-1.5 text-right">মূল্য</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${bill.mergedItems.map(i => `
+                                <tr>
+                                    <td class="py-1.5 font-medium">${i.nameBn}</td>
+                                    <td class="py-1.5 text-center">${i.qty}</td>
+                                    <td class="py-1.5 text-right font-semibold">৳${i.price * i.qty}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="border-t border-dashed border-slate-300 pt-2.5 text-xs space-y-1">
+                        <div class="flex justify-between"><span>সাব-টোটাল:</span><span>৳${bill.subtotal}</span></div>
+                        <div class="flex justify-between"><span>ভ্যাট (${appState.vatRate}%):</span><span>৳${bill.vat}</span></div>
+                        <div class="flex justify-between font-bold text-base pt-1 border-t border-slate-200">
+                            <span>সর্বমোট বিল:</span>
+                            <span>৳${bill.grandTotal}</span>
+                        </div>
+                    </div>
+
+                    <div class="text-center pt-2 border-t border-slate-100 text-[11px]">
+                        <span class="px-2.5 py-0.5 rounded-full font-bold ${bill.isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                            স্ট্যাটাস: ${bill.isPaid ? `PAID (${latestOrder.paymentMethod || 'Paid'})` : 'UNPAID'}
+                        </span>
+                        <p class="text-slate-400 mt-2">ধন্যবাদ! আবার আসবেন।</p>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('admin-receipt-modal').classList.remove('hidden');
+        }
+
+        function closeAdminReceiptModal() {
+            document.getElementById('admin-receipt-modal').classList.add('hidden');
+        }
+
+        // =========================================================================
+        // 9. BADGES, TOASTS & INITIALIZATION
+        // =========================================================================
+        function updateBadges() {
+            const activeOrdersCount = appState.orders.filter(o => o.status !== 'served').length;
+            const activeCallsCount = appState.waiterCalls.length;
+
+            const kitchenBadge = document.getElementById('kitchen-badge');
+            const waiterBadge = document.getElementById('waiter-badge');
+            const adminDot = document.getElementById('admin-alert-dot');
+
+            if (kitchenBadge) {
+                kitchenBadge.textContent = activeOrdersCount;
+                kitchenBadge.classList.toggle('hidden', activeOrdersCount === 0);
+            }
+            if (waiterBadge) {
+                waiterBadge.textContent = activeCallsCount;
+                waiterBadge.classList.toggle('hidden', activeCallsCount === 0);
+            }
+            if (adminDot) {
+                adminDot.classList.toggle('hidden', activeOrdersCount === 0 && activeCallsCount === 0);
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const colors = {
+                success: 'bg-emerald-900 text-white border-emerald-500',
+                info: 'bg-slate-900 text-white border-amber-500',
+                error: 'bg-rose-900 text-white border-rose-500'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-2xl border-l-4 shadow-xl text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 transition-all ${colors[type] || colors.info}`;
+            toast.innerHTML = `
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" class="text-white/70 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 3500);
+        }
+
+        function renderAllViews() {
+            renderMenu();
+            renderCustomerLiveOrders();
+            updateCartUI();
+            renderAdminMenuTable();
+            renderKitchenDashboard();
+            renderWaiterDashboard();
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initState();
+        });
+    </script>
+</body>
+</html>
