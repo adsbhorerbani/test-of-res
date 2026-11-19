@@ -2551,11 +2551,51 @@
 
             saveState();
             playNotificationSound();
-            showToast('ধন্যবাদ! আপনার রিভিউ জমা হয়েছে। ওয়েবসাইট শুরু থেকে লোড হচ্ছে...', 'success');
+            showThankYouAndReload(customerName);
+        }
+
+        function showThankYouAndReload(customerName = 'সম্মানিত অতিথি') {
+            const modal = document.getElementById('bill-modal');
+            const body = document.getElementById('bill-modal-body');
+            if (!modal || !body) {
+                resetAndReloadHome();
+                return;
+            }
+
+            modal.classList.remove('hidden');
+            body.innerHTML = `
+                <div class="py-6 px-3 text-center space-y-4">
+                    <div class="relative w-20 h-20 mx-auto flex items-center justify-center">
+                        <div class="absolute inset-0 rounded-full bg-emerald-400/25 animate-ping"></div>
+                        <div class="relative w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center text-3xl shadow-lg">
+                            <i class="fa-solid fa-heart"></i>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <span class="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold">
+                            ${appState.restaurantName}
+                        </span>
+                        <h3 class="text-2xl font-bold text-slate-900">অসংখ্য ধন্যবাদ, ${customerName}!</h3>
+                        <p class="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto">
+                            আপনার মূল্যবান মতামত ও আমাদের সাথে সময় কাটানোর জন্য আন্তরিক কৃতজ্ঞতা। আপনার দিনটি শুভ হোক, আবার আসবেন!
+                        </p>
+                    </div>
+
+                    <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs text-slate-500 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin text-emerald-600"></i>
+                        <span>হোম স্ক্রিনে ফিরে যাচ্ছে...</span>
+                    </div>
+
+                    <button type="button" onclick="resetAndReloadHome()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-amber-400 font-bold rounded-2xl text-xs transition">
+                        এখনই হোম স্ক্রিনে যান
+                    </button>
+                </div>
+            `;
 
             setTimeout(() => {
                 resetAndReloadHome();
-            }, 900);
+            }, 3200);
         }
 
         function closeBillModal() {
