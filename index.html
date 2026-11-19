@@ -3093,15 +3093,14 @@
         });
     </script>
     <!-- =====================================================================
-     FIREBASE (Firestore) ADD-ON
-     কোথায় বসাবেন: আপনার মূল HTML ফাইলের একদম শেষে, মূল <script>...</script> এর
-     পরে এবং </body> এর ঠিক আগে। বাকি কোড কিছুই বদলাতে হবে না।
+     FIREBASE ADD-ON v2 (Firestore + Authentication)
+     আগের firebase-addon.html মুছে এটা বসান: মূল <script> এর পরে, </body> এর আগে।
      ===================================================================== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 (function () {
-    // ১) Firebase Console > Project settings > Your apps (Web) থেকে config কপি করে বসান
     const firebaseConfig = {
         apiKey: "AIzaSyBBKWBKVv7iETBrpVV_bJ_PqUVmmqJ9-Ts",
         authDomain: "foodddddd.firebaseapp.com",
@@ -3119,14 +3118,14 @@
 
     firebase.initializeApp(FB_CONFIG);
     const db = firebase.firestore();
+    const auth = firebase.auth();
 
-    // Firestore-এ যা যা সেভ হবে
     const COLS = ['menuItems', 'orders', 'waiterCalls', 'reviews'];
+    const CUSTOMER_COLS = ['orders', 'waiterCalls', 'reviews'];
     const CFG_KEYS = ['restaurantName', 'restaurantLogo', 'wifiSsid', 'wifiPassword', 'vatRate', 'tables', 'paymentAccounts'];
-    // cart, currentTable, wifiConnected, selectedCategory প্রতিটি ডিভাইসে আলাদা (লোকাল) থাকবে
 
-    const synced = { menuItems: {}, orders: {}, waiterCalls: {}, reviews: {}, main: '', admin: '' };
-    let ready = false, applying = false, needSeed = false, pending = 6;
+    const synced = { menuItems: {}, orders: {}, waiterCalls: {}, reviews: {}, main: '' };
+    let ready = false, applying = false, needSeed = false, pending = 5;
 
     const stable = v => {
         if (Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
@@ -3173,26 +3172,25 @@
 
     async function pushAll() {
         if (!ready || applying) return;
+        const isAdm = !!auth.currentUser;
+        if (needSeed && !isAdm) return; // প্রথম আপলোড শুধু অ্যাডমিন করবে
         try {
-            const jobs = COLS.map(k => pushCol(k, appState[k] || []));
-            const main = stable(cfgMain());
-            if (main !== synced.main) {
-                synced.main = main;
-                jobs.push(db.collection('config').doc('main').set(clean(cfgMain())));
-            }
-            const admin = stable(appState.adminCreds);
-            if (admin !== synced.admin) {
-                synced.admin = admin;
-                jobs.push(db.collection('config').doc('admin').set(clean(appState.adminCreds)));
+            const jobs = (isAdm ? COLS : CUSTOMER_COLS).map(k => pushCol(k, appState[k] || []));
+            if (isAdm) {
+                const main = stable(cfgMain());
+                if (main !== synced.main) {
+                    synced.main = main;
+                    jobs.push(db.collection('config').doc('main').set(clean(cfgMain())));
+                }
             }
             await Promise.all(jobs);
+            if (isAdm) needSeed = false;
         } catch (e) {
             console.error(e);
             showToast('Firebase-এ সেভ হয়নি: ' + e.message, 'error');
         }
     }
 
-    // আগের saveState-কে মুড়ে দিচ্ছি: লোকাল সেভের পাশাপাশি Firebase-এও যাবে
     const _origSave = saveState;
     saveState = function () { _origSave(); pushAll(); };
 
@@ -3230,7 +3228,7 @@
         if (--pending > 0) return;
         ready = true;
         showToast('Firebase ডাটাবেস যুক্ত হয়েছে ✓', 'success');
-        if (needSeed) pushAll(); // প্রথমবার: বর্তমান ডাটা Firebase-এ আপলোড
+        if (needSeed && auth.currentUser) pushAll();
     }
 
     function onErr(err) {
@@ -3248,8 +3246,73 @@
         });
     }
 
+    // ---------------- Firebase Authentication (অ্যাডমিন লগইন) ----------------
+    window.handleAdminLogin = async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('admin-email-input').value.trim();
+        const pass = document.getElementById('admin-pass-input').value;
+        const errEl = document.getElementById('login-error-msg');
+        try {
+            await auth.signInWithEmailAndPassword(email, pass);
+            errEl.classList.add('hidden');
+        } catch (ex) {
+            errEl.classList.remove('hidden');
+        }
+    };
+
+    window.logoutAdmin = function () {
+        document.getElementById('admin-pass-input').value = '';
+        auth.signOut();
+        showToast('অ্যাডমিন প্যানেল থেকে লগআউট করা হয়েছে।', 'info');
+    };
+
+    window.updateAdminCredentials = async function (e) {
+        e.preventDefault();
+        const p = document.getElementById('setting-admin-pass').value;
+        if (p.length < 6) { showToast('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।', 'error'); return; }
+        try {
+            await auth.currentUser.updatePassword(p);
+            document.getElementById('setting-admin-pass').value = '';
+            showToast('অ্যাডমিন পাসওয়ার্ড আপডেট হয়েছে!', 'success');
+        } catch (ex) {
+            showToast(ex.code === 'auth/requires-recent-login'
+                ? 'নিরাপত্তার জন্য লগআউট করে আবার লগইন করে চেষ্টা করুন।' : ex.message, 'error');
+        }
+    };
+
+    const _origLoadSettings = loadSettingsForm;
+    window.loadSettingsForm = loadSettingsForm = function () {
+        _origLoadSettings();
+        const em = document.getElementById('setting-admin-email');
+        em.value = auth.currentUser ? auth.currentUser.email : '';
+        em.readOnly = true; // ইমেইল পরিবর্তন Firebase Console থেকে
+        document.getElementById('setting-admin-pass').value = '';
+        document.getElementById('setting-admin-pass').minLength = 6;
+    };
+
+    auth.onAuthStateChanged(user => {
+        isAdminAuthenticated = !!user;
+        const login = document.getElementById('admin-login-screen');
+        const dash = document.getElementById('admin-dashboard-screen');
+        if (user) {
+            sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+            const wasLogin = login && !login.classList.contains('hidden');
+            login.classList.add('hidden');
+            dash.classList.remove('hidden');
+            if (wasLogin) { switchAdminTab('menu-manager'); showToast('অ্যাডমিন প্যানেলে স্বাগতম!', 'success'); }
+            if (ready && needSeed) pushAll();
+        } else {
+            sessionStorage.removeItem(SESSION_AUTH_KEY);
+            dash.classList.add('hidden');
+            login.classList.remove('hidden');
+        }
+    });
+
+    // ---------------- Firestore রিয়েল-টাইম সিঙ্ক ----------------
     function start() {
-        // মেনু / অর্ডার / ওয়েটার কল / রিভিউ — রিয়েল-টাইম সিঙ্ক
+        const demo = document.querySelector('#admin-login-screen form div.mt-4');
+        if (demo) demo.style.display = 'none'; // ডেমো ইমেইল/পাসওয়ার্ড বক্স আর দরকার নেই
+
         COLS.forEach(key => {
             let first = true;
             db.collection(key).onSnapshot(snap => {
@@ -3264,7 +3327,6 @@
             }, onErr);
         });
 
-        // রেস্টুরেন্ট সেটিংস
         let firstMain = true;
         db.collection('config').doc('main').onSnapshot(doc => {
             if (doc.exists) {
@@ -3278,20 +3340,8 @@
             }
             if (firstMain) { firstMain = false; firstDone(); }
         }, onErr);
-
-        // অ্যাডমিন ইমেইল/পাসওয়ার্ড
-        let firstAdmin = true;
-        db.collection('config').doc('admin').onSnapshot(doc => {
-            if (doc.exists) {
-                appState.adminCreds = doc.data();
-                synced.admin = stable(appState.adminCreds);
-                persistLocal();
-            }
-            if (firstAdmin) { firstAdmin = false; firstDone(); }
-        }, onErr);
     }
 
-    // মূল অ্যাপের initState() চলার পরে শুরু হবে
     window.addEventListener('DOMContentLoaded', start);
 })();
 </script>
