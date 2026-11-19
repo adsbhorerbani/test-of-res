@@ -3092,5 +3092,208 @@
             initState();
         });
     </script>
+    <!-- =====================================================================
+     FIREBASE (Firestore) ADD-ON
+     কোথায় বসাবেন: আপনার মূল HTML ফাইলের একদম শেষে, মূল <script>...</script> এর
+     পরে এবং </body> এর ঠিক আগে। বাকি কোড কিছুই বদলাতে হবে না।
+     ===================================================================== -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+(function () {
+    // ১) Firebase Console > Project settings > Your apps (Web) থেকে config কপি করে বসান
+    const firebaseConfig = {
+        apiKey: "AIzaSyBBKWBKVv7iETBrpVV_bJ_PqUVmmqJ9-Ts",
+        authDomain: "foodddddd.firebaseapp.com",
+        projectId: "foodddddd",
+        storageBucket: "foodddddd.firebasestorage.app",
+        messagingSenderId: "306774633355",
+        appId: "1:306774633355:web:114eb78954d4809cf55d8e",
+        measurementId: "G-YCQ08C6SM6"
+    };
+
+    if (!FB_CONFIG.apiKey || FB_CONFIG.apiKey.startsWith('YOUR_') || typeof firebase === 'undefined') {
+        console.warn('Firebase config দেওয়া হয়নি — অ্যাপ আগের মতো localStorage-এ চলছে।');
+        return;
+    }
+
+    firebase.initializeApp(FB_CONFIG);
+    const db = firebase.firestore();
+
+    // Firestore-এ যা যা সেভ হবে
+    const COLS = ['menuItems', 'orders', 'waiterCalls', 'reviews'];
+    const CFG_KEYS = ['restaurantName', 'restaurantLogo', 'wifiSsid', 'wifiPassword', 'vatRate', 'tables', 'paymentAccounts'];
+    // cart, currentTable, wifiConnected, selectedCategory প্রতিটি ডিভাইসে আলাদা (লোকাল) থাকবে
+
+    const synced = { menuItems: {}, orders: {}, waiterCalls: {}, reviews: {}, main: '', admin: '' };
+    let ready = false, applying = false, needSeed = false, pending = 6;
+
+    const stable = v => {
+        if (Array.isArray(v)) return '[' + v.map(stable).join(',') + ']';
+        if (v && typeof v === 'object') {
+            return '{' + Object.keys(v).filter(k => v[k] !== undefined).sort()
+                .map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}';
+        }
+        return JSON.stringify(v === undefined ? null : v);
+    };
+    const clean = o => JSON.parse(JSON.stringify(o));
+    const big = id => Number(id) > 1e12;
+
+    const SORT = {
+        menuItems: (a, b) => (big(b.id) - big(a.id)) || (big(a.id) ? b.id - a.id : a.id - b.id),
+        orders: (a, b) => (b._ts || 0) - (a._ts || 0),
+        waiterCalls: (a, b) => (b._ts || 0) - (a._ts || 0),
+        reviews: (a, b) => (b._ts || 0) - (a._ts || 0)
+    };
+
+    function cfgMain() {
+        const o = {};
+        CFG_KEYS.forEach(k => { o[k] = appState[k] === undefined ? '' : appState[k]; });
+        return o;
+    }
+
+    async function pushCol(key, arr) {
+        const prev = synced[key] || {};
+        const next = {};
+        const batch = db.batch();
+        let n = 0;
+        arr.forEach(o => {
+            if (!o._ts) o._ts = Date.now();
+            const id = String(o.id);
+            const json = stable(o);
+            next[id] = json;
+            if (prev[id] !== json) { batch.set(db.collection(key).doc(id), clean(o)); n++; }
+        });
+        Object.keys(prev).forEach(id => {
+            if (!(id in next)) { batch.delete(db.collection(key).doc(id)); n++; }
+        });
+        synced[key] = next;
+        if (n) await batch.commit();
+    }
+
+    async function pushAll() {
+        if (!ready || applying) return;
+        try {
+            const jobs = COLS.map(k => pushCol(k, appState[k] || []));
+            const main = stable(cfgMain());
+            if (main !== synced.main) {
+                synced.main = main;
+                jobs.push(db.collection('config').doc('main').set(clean(cfgMain())));
+            }
+            const admin = stable(appState.adminCreds);
+            if (admin !== synced.admin) {
+                synced.admin = admin;
+                jobs.push(db.collection('config').doc('admin').set(clean(appState.adminCreds)));
+            }
+            await Promise.all(jobs);
+        } catch (e) {
+            console.error(e);
+            showToast('Firebase-এ সেভ হয়নি: ' + e.message, 'error');
+        }
+    }
+
+    // আগের saveState-কে মুড়ে দিচ্ছি: লোকাল সেভের পাশাপাশি Firebase-এও যাবে
+    const _origSave = saveState;
+    saveState = function () { _origSave(); pushAll(); };
+
+    function persistLocal() {
+        applying = true;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch (e) {}
+        applying = false;
+    }
+
+    function rerender() {
+        if (!appState.tables.includes(appState.currentTable)) appState.currentTable = appState.tables[0];
+        applyRestaurantBranding();
+        populateTableSelector();
+        const menuScreen = document.getElementById('customer-menu-screen');
+        if (menuScreen && !menuScreen.classList.contains('hidden')) {
+            renderMenu(); renderCustomerLiveOrders(); updateCartUI();
+        }
+        const adminPortal = document.getElementById('portal-admin');
+        if (isAdminAuthenticated && adminPortal && !adminPortal.classList.contains('hidden')) {
+            const views = {
+                'menu-manager': renderAdminMenuTable,
+                'kitchen': renderKitchenDashboard,
+                'waiter': renderWaiterDashboard,
+                'reviews': renderAdminReviews
+            };
+            Object.keys(views).forEach(t => {
+                const el = document.getElementById('admin-content-' + t);
+                if (el && !el.classList.contains('hidden')) views[t]();
+            });
+        }
+        updateBadges();
+    }
+
+    function firstDone() {
+        if (--pending > 0) return;
+        ready = true;
+        showToast('Firebase ডাটাবেস যুক্ত হয়েছে ✓', 'success');
+        if (needSeed) pushAll(); // প্রথমবার: বর্তমান ডাটা Firebase-এ আপলোড
+    }
+
+    function onErr(err) {
+        console.error(err);
+        showToast('Firebase সংযোগ সমস্যা: ' + err.message, 'error');
+    }
+
+    function notify(key, snap) {
+        if (!isAdminAuthenticated) return;
+        snap.docChanges().forEach(c => {
+            if (c.type !== 'added' || c.doc.metadata.hasPendingWrites) return;
+            const d = c.doc.data();
+            if (key === 'orders') { playNotificationSound(); showToast(`নতুন অর্ডার #${d.id} — ${d.table}`, 'success'); }
+            if (key === 'waiterCalls') { playNotificationSound(); showToast(`ওয়েটার কল: ${d.table} — ${d.reason}`, 'info'); }
+        });
+    }
+
+    function start() {
+        // মেনু / অর্ডার / ওয়েটার কল / রিভিউ — রিয়েল-টাইম সিঙ্ক
+        COLS.forEach(key => {
+            let first = true;
+            db.collection(key).onSnapshot(snap => {
+                const map = {}, arr = [];
+                snap.forEach(d => { const o = d.data(); arr.push(o); map[d.id] = stable(o); });
+                synced[key] = map;
+                if (!first) notify(key, snap);
+                appState[key] = arr.sort(SORT[key]);
+                persistLocal();
+                rerender();
+                if (first) { first = false; firstDone(); }
+            }, onErr);
+        });
+
+        // রেস্টুরেন্ট সেটিংস
+        let firstMain = true;
+        db.collection('config').doc('main').onSnapshot(doc => {
+            if (doc.exists) {
+                const d = doc.data();
+                CFG_KEYS.forEach(k => { if (d[k] !== undefined) appState[k] = d[k]; });
+                synced.main = stable(cfgMain());
+                persistLocal();
+                rerender();
+            } else if (firstMain) {
+                needSeed = true;
+            }
+            if (firstMain) { firstMain = false; firstDone(); }
+        }, onErr);
+
+        // অ্যাডমিন ইমেইল/পাসওয়ার্ড
+        let firstAdmin = true;
+        db.collection('config').doc('admin').onSnapshot(doc => {
+            if (doc.exists) {
+                appState.adminCreds = doc.data();
+                synced.admin = stable(appState.adminCreds);
+                persistLocal();
+            }
+            if (firstAdmin) { firstAdmin = false; firstDone(); }
+        }, onErr);
+    }
+
+    // মূল অ্যাপের initState() চলার পরে শুরু হবে
+    window.addEventListener('DOMContentLoaded', start);
+})();
+</script>
 </body>
 </html>
