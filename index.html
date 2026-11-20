@@ -3093,25 +3093,35 @@
         });
     </script>
     <!-- =====================================================================
-     FIREBASE ADD-ON v2 (Firestore + Authentication)
+     FIREBASE ADD-ON v3 (Firestore + Authentication)
      আগের firebase-addon.html মুছে এটা বসান: মূল <script> এর পরে, </body> এর আগে।
      ===================================================================== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- ১) আপনার Firebase config এখানে বসান (আলাদা script ট্যাগে, নাম FB_CONFIG ই রাখুন) -->
+<script>
+const FB_CONFIG = {
+    apiKey: "AIzaSyBBKWBKVv7iETBrpVV_bJ_PqUVmmqJ9-Ts",
+    authDomain: "foodddddd.firebaseapp.com",
+    projectId: "foodddddd",
+    storageBucket: "foodddddd.firebasestorage.app",
+    messagingSenderId: "306774633355",
+    appId: "1:306774633355:web:114eb78954d4809cf55d8e"
+};
+</script>
+
+<!-- ২) এর নিচের অংশে কিছু বদলাতে হবে না -->
 <script>
 (function () {
-    const firebaseConfig = {
-        apiKey: "AIzaSyBBKWBKVv7iETBrpVV_bJ_PqUVmmqJ9-Ts",
-        authDomain: "foodddddd.firebaseapp.com",
-        projectId: "foodddddd",
-        storageBucket: "foodddddd.firebasestorage.app",
-        messagingSenderId: "306774633355",
-        appId: "1:306774633355:web:114eb78954d4809cf55d8e",
-        measurementId: "G-YCQ08C6SM6"
-    };
+    const CFG = (typeof FB_CONFIG !== 'undefined' && FB_CONFIG) || (typeof firebaseConfig !== 'undefined' && firebaseConfig) || null;
 
-    firebase.initializeApp(FB_CONFIG);
+    if (!CFG || !CFG.apiKey || String(CFG.apiKey).startsWith('YOUR_') || typeof firebase === 'undefined') {
+        console.warn('Firebase config দেওয়া হয়নি — অ্যাপ আগের মতো localStorage-এ চলছে।');
+        return;
+    }
+
+    firebase.initializeApp(CFG);
     const db = firebase.firestore();
     const auth = firebase.auth();
 
