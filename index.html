@@ -3407,5 +3407,26 @@ const FB_CONFIG = {
     });
 })();
 </script>
+    <!-- =====================================================================
+     HIDE TOP BAR ADD-ON (কাস্টমার সাইট থেকে "কাস্টমার সাইট / অ্যাডমিন প্যানেল" বার বাদ)
+     কোথায় বসাবেন: direct-menu-addon ব্লকের পরে, </body> এর আগে।
+     অ্যাডমিন প্যানেল খুলতে লিংকের শেষে #admin লিখুন:  https://আপনার-সাইট/#admin
+     ===================================================================== -->
+<style id="topbar-hide-css">
+    body > .sticky.top-0.z-50 { display: none !important; }   /* উপরের বার */
+    #customer-menu-screen header { top: 0 !important; }        /* বার না থাকায় হেডার একদম উপরে */
+</style>
+<script>
+(function () {
+    const isAdminMode = location.hash === '#admin' || new URLSearchParams(location.search).has('admin');
+    if (!isAdminMode) return; // সাধারণ কাস্টমারের জন্য বার লুকানোই থাকবে
+
+    // অ্যাডমিন মোডে বার ফিরে আসবে এবং সরাসরি অ্যাডমিন লগইন খুলবে
+    document.getElementById('topbar-hide-css').remove();
+    window.addEventListener('DOMContentLoaded', function () {
+        openPortal('admin');
+    });
+})();
+</script>
 </body>
 </html>
