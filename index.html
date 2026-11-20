@@ -3350,5 +3350,62 @@ const FB_CONFIG = {
     window.addEventListener('DOMContentLoaded', start);
 })();
 </script>
+    <!-- =====================================================================
+     DIRECT MENU ADD-ON (Wi-Fi কানেক্ট স্ক্রিন বাদ)
+     কোথায় বসাবেন: Firebase add-on ব্লকের ঠিক পরে, </body> এর আগে।
+     QR স্ক্যান করলে (?table=Table #02) সরাসরি ওই টেবিলের মেনু খুলবে।
+     ===================================================================== -->
+<style>#wifi-gate-screen { display: none !important; }</style>
+<script>
+(function () {
+    const scanned = new URLSearchParams(location.search).get('table');
+    let userPicked = false;
+
+    // টেবিল সিলেক্টর আপডেটের সময় QR-এ স্ক্যান করা টেবিলকে অগ্রাধিকার দেবে
+    const _pts = populateTableSelector;
+    populateTableSelector = function () {
+        if (scanned && !userPicked && appState.tables.includes(scanned)) appState.currentTable = scanned;
+        _pts();
+        buildHeaderSelect();
+    };
+
+    // মেনুর হেডারে "টেবিল পরিবর্তন" বাটনের জায়গায় টেবিল সিলেক্টর
+    function buildHeaderSelect() {
+        const lbl = document.getElementById('header-table-label');
+        if (!lbl) return;
+        let sel = document.getElementById('header-table-select');
+        if (!sel) {
+            const old = document.querySelector('button[onclick="disconnectWifiGate()"]');
+            sel = document.createElement('select');
+            sel.id = 'header-table-select';
+            sel.className = 'font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5 text-xs focus:outline-none cursor-pointer';
+            sel.onchange = function () {
+                userPicked = true;
+                changeTable(sel.value);
+                renderCustomerLiveOrders();
+            };
+            if (old) old.replaceWith(sel); else lbl.parentElement.appendChild(sel);
+            lbl.style.display = 'none';
+            if (lbl.nextElementSibling) lbl.nextElementSibling.style.display = 'none';
+        }
+        sel.innerHTML = appState.tables.map(t =>
+            `<option value="${t}"${t === appState.currentTable ? ' selected' : ''}>${t}</option>`
+        ).join('');
+    }
+
+    window.addEventListener('DOMContentLoaded', function () {
+        document.getElementById('wifi-gate-screen').classList.add('hidden');
+        document.getElementById('customer-menu-screen').classList.remove('hidden');
+        document.querySelectorAll('#customer-menu-screen header span').forEach(function (s) {
+            if (s.textContent.includes('Wi-Fi যুক্ত')) s.style.display = 'none'; // "Wi-Fi যুক্ত" ব্যাজ বাদ
+        });
+        populateTableSelector();
+        renderCategories();
+        renderMenu();
+        renderCustomerLiveOrders();
+        updateCartUI();
+    });
+})();
+</script>
 </body>
 </html>
