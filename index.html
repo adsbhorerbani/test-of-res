@@ -3111,11 +3111,6 @@
         measurementId: "G-YCQ08C6SM6"
     };
 
-    if (!FB_CONFIG.apiKey || FB_CONFIG.apiKey.startsWith('YOUR_') || typeof firebase === 'undefined') {
-        console.warn('Firebase config দেওয়া হয়নি — অ্যাপ আগের মতো localStorage-এ চলছে।');
-        return;
-    }
-
     firebase.initializeApp(FB_CONFIG);
     const db = firebase.firestore();
     const auth = firebase.auth();
