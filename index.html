@@ -3428,5 +3428,149 @@ const FB_CONFIG = {
     });
 })();
 </script>
+    <!-- =====================================================================
+     BANGLA QR UPLOAD ADD-ON
+     কোথায় বসাবেন: অন্য add-on গুলোর পরে, </body> এর আগে।
+     অ্যাডমিন > সেটিংস > পেমেন্ট মাধ্যম ও Bangla QR-এ আপনার আসল QR ছবি আপলোড করুন।
+     কাস্টমারের পেমেন্ট পেজ ও বিল রিসিটে সেই ছবিই দেখাবে (Firebase-এও সেভ হবে)।
+     ===================================================================== -->
+<script>
+(function () {
+    const getImg = () => ((appState.paymentAccounts || {}).banglaQrImage || '');
+
+    // ---------- অ্যাডমিন: প্রিভিউ ----------
+    function renderPreview() {
+        const box = document.getElementById('bqr-preview');
+        if (!box) return;
+        box.innerHTML = getImg()
+            ? `<img src="${getImg()}" alt="Bangla QR" class="w-full h-full object-contain">`
+            : 'QR নেই';
+    }
+
+    // ---------- ছবি আপলোড (রিসাইজ করে সেভ) ----------
+    function onFile(ev) {
+        const file = ev.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const im = new Image();
+            im.onload = function () {
+                const max = 520;
+                let w = im.width, h = im.height;
+                if (w > max || h > max) {
+                    if (w > h) { h = Math.round(h * max / w); w = max; }
+                    else { w = Math.round(w * max / h); h = max; }
+                }
+                const c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(im, 0, 0, w, h);
+                let data = c.toDataURL('image/png');
+                if (data.length > 350000) data = c.toDataURL('image/jpeg', 0.9);
+                appState.paymentAccounts = Object.assign({}, appState.paymentAccounts, { banglaQrImage: data });
+                saveState();
+                renderPreview();
+                showToast('Bangla QR ছবি আপলোড হয়েছে! পেমেন্ট পেজ ও বিলে এটি দেখাবে।', 'success');
+            };
+            im.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        ev.target.value = '';
+    }
+
+    function removeImg() {
+        appState.paymentAccounts = Object.assign({}, appState.paymentAccounts, { banglaQrImage: '' });
+        saveState();
+        renderPreview();
+        showToast('আপলোড করা QR মুছে ফেলা হয়েছে। অটো-জেনারেটেড QR ব্যবহার হবে।', 'info');
+    }
+
+    // "পেমেন্ট তথ্য সংরক্ষণ" চাপলে QR ছবি যেন মুছে না যায়
+    savePaymentSettings = function (e) {
+        e.preventDefault();
+        const old = appState.paymentAccounts || {};
+        appState.paymentAccounts = {
+            bkash: document.getElementById('setting-pay-bkash').value.trim(),
+            nagad: document.getElementById('setting-pay-nagad').value.trim(),
+            upay: document.getElementById('setting-pay-upay').value.trim(),
+            bank: document.getElementById('setting-pay-bank').value.trim(),
+            banglaQr: document.getElementById('setting-pay-banglaqr').value.trim(),
+            banglaQrImage: old.banglaQrImage || ''
+        };
+        saveState();
+        showToast('bKash, Nagad, Upay, Bank ও Bangla QR তথ্য সংরক্ষিত হয়েছে!', 'success');
+    };
+
+    // সেটিংস ট্যাব খুললে প্রিভিউ আপডেট
+    const _loadSettings = loadSettingsForm;
+    loadSettingsForm = function () { _loadSettings(); renderPreview(); };
+
+    // ---------- কাস্টমার পেমেন্ট পেজ ----------
+    window.showBanglaQrBig = function () {
+        if (!getImg()) return;
+        const ov = document.createElement('div');
+        ov.className = 'fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4';
+        ov.onclick = () => ov.remove();
+        ov.innerHTML = `<div class="bg-white p-3 rounded-2xl max-w-[92vw]">
+            <img src="${getImg()}" alt="Bangla QR" style="max-width:86vw;max-height:78vh;object-fit:contain">
+            <p class="text-center text-xs text-slate-500 mt-2">বন্ধ করতে ট্যাপ করুন</p></div>`;
+        document.body.appendChild(ov);
+    };
+
+    const _updPay = updatePaymentGatewayDetails;
+    updatePaymentGatewayDetails = function (method, amount) {
+        _updPay(method, amount);
+        if (method === 'Bangla QR' && getImg()) {
+            const box = document.getElementById('customer-bangla-qr-box');
+            if (!box) return;
+            box.innerHTML = `<img src="${getImg()}" alt="Bangla QR" onclick="showBanglaQrBig()" class="w-24 h-24 object-contain cursor-zoom-in">`;
+            if (box.nextElementSibling) {
+                box.nextElementSibling.insertAdjacentHTML('beforeend',
+                    '<p class="text-[10px] text-emerald-700 font-bold mt-1">QR-এ ট্যাপ করলে বড় হবে</p>');
+            }
+        }
+    };
+
+    // ---------- বিল রিসিট ----------
+    const _receipt = openAdminReceiptPrint;
+    openAdminReceiptPrint = function (tableName) {
+        _receipt(tableName);
+        const box = document.getElementById('receipt-bangla-qr-box');
+        if (box && getImg()) {
+            box.innerHTML = `<img src="${getImg()}" alt="Bangla QR" style="width:96px;height:96px;object-fit:contain">`;
+        }
+    };
+
+    // ---------- অ্যাডমিন সেটিংসে আপলোড বক্স যোগ ----------
+    window.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('form[onsubmit="savePaymentSettings(event)"]');
+        if (!form || document.getElementById('bqr-file')) return;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const block = document.createElement('div');
+        block.className = 'p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3';
+        block.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div id="bqr-preview" class="w-20 h-20 rounded-xl bg-white border border-emerald-200 flex items-center justify-center overflow-hidden shrink-0 text-[10px] text-slate-400 text-center p-1">QR নেই</div>
+                <div>
+                    <p class="text-xs font-bold text-emerald-800">🇧🇩 আপনার আসল Bangla QR ছবি আপলোড করুন</p>
+                    <p class="text-[11px] text-slate-500">ব্যাংক/MFS অ্যাপ থেকে QR-এর স্ক্রিনশট বা ছবি দিন। কাস্টমারের পেমেন্ট পেজ ও বিল রিসিটে এটাই দেখাবে।</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer transition">
+                    <i class="fa-solid fa-upload mr-1"></i> QR আপলোড
+                    <input type="file" id="bqr-file" accept="image/*" class="hidden">
+                </label>
+                <button type="button" id="bqr-remove" class="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 font-bold text-xs">মুছুন</button>
+            </div>`;
+        form.insertBefore(block, submitBtn);
+        document.getElementById('bqr-file').addEventListener('change', onFile);
+        document.getElementById('bqr-remove').addEventListener('click', removeImg);
+        renderPreview();
+    });
+})();
+</script>
 </body>
 </html>
